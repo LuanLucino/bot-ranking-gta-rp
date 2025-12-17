@@ -13,7 +13,7 @@ const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 
 // ================== CONFIG ==================
-const CANAL_ANUNCIO_ID = '1450842612557938769'; // canal correto
+const CANAL_ANUNCIO_ID = '1450842612557938769';
 // ============================================
 
 // ---------- CLIENT ----------
@@ -104,12 +104,12 @@ async function anunciarTop3() {
           .setTitle('🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI')
           .setDescription(
             'Resultado oficial do **ranking financeiro semanal**.\n' +
-            'Parabéns aos membros que mais se destacaram esta semana.'
+            'Parabéns aos membros que mais se destacaram.'
           )
           .setColor(0xFFD700)
-          .setThumbnail('https://i.imgur.com/8QfZQbT.png') // troque pela sua logo
+          .setThumbnail('https://i.imgur.com/8QfZQbT.png')
           .setFooter({
-            text: `Semana encerrada em ${new Date().toLocaleString('pt-BR')}`
+            text: `Atualizado em ${new Date().toLocaleString('pt-BR')}`
           })
           .setTimestamp();
 
@@ -122,11 +122,11 @@ async function anunciarTop3() {
         });
 
         canal.send({ embeds: [embed] });
-        console.log('📢 Anúncio do TOP 3 enviado com sucesso.');
+        console.log('📢 Anúncio TOP 3 enviado.');
       }
     );
   } catch (e) {
-    console.error('Erro ao anunciar TOP 3:', e);
+    console.error('Erro no anúncio TOP 3:', e);
   }
 }
 
@@ -137,7 +137,7 @@ cron.schedule('0 3 * * 1', () => {
   resetSemanalAutomatico();
 });
 
-// Anúncio semanal → domingo 19:00 BR (22:00 UTC)
+// Anúncio automático → domingo 19:00 BR (22:00 UTC)
 cron.schedule('0 22 * * 0', () => {
   anunciarTop3();
 });
@@ -151,6 +151,11 @@ const commands = [
   new SlashCommandBuilder()
     .setName('rankingmensal')
     .setDescription('Mostra o ranking mensal'),
+
+  new SlashCommandBuilder()
+    .setName('forcar-anuncio')
+    .setDescription('Força o anúncio do TOP 3 no canal configurado')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('adddinheiro')
@@ -193,23 +198,27 @@ client.on('interactionCreate', async interaction => {
 
   const { commandName, guild } = interaction;
 
+  if (commandName === 'forcar-anuncio') {
+    await interaction.reply({
+      content: '📢 Anúncio do TOP 3 enviado com sucesso.',
+      ephemeral: true
+    });
+    anunciarTop3();
+  }
+
   if (commandName === 'ranking') {
-    db.all(
-      'SELECT * FROM ranking ORDER BY money DESC',
-      [],
-      (err, rows) => {
-        if (!rows || rows.length === 0) {
-          return interaction.reply('📭 Ranking semanal vazio.');
-        }
-
-        let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
-        rows.forEach((r, i) => {
-          msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
-        });
-
-        interaction.reply(msg);
+    db.all('SELECT * FROM ranking ORDER BY money DESC', [], (err, rows) => {
+      if (!rows || rows.length === 0) {
+        return interaction.reply('📭 Ranking semanal vazio.');
       }
-    );
+
+      let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
+      rows.forEach((r, i) => {
+        msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
+      });
+
+      interaction.reply(msg);
+    });
   }
 
   if (commandName === 'rankingmensal') {
@@ -239,25 +248,21 @@ client.on('interactionCreate', async interaction => {
     const valor = interaction.options.getInteger('valor');
     const nome = member.nickname ?? user.username;
 
-    db.get(
-      'SELECT * FROM ranking WHERE userId = ?',
-      [user.id],
-      (err, row) => {
-        if (row) {
-          db.run(
-            'UPDATE ranking SET money = ?, username = ? WHERE userId = ?',
-            [row.money + valor, nome, user.id]
-          );
-        } else {
-          db.run(
-            'INSERT INTO ranking VALUES (?, ?, ?)',
-            [user.id, nome, valor]
-          );
-        }
-
-        interaction.reply(`✅ ${formatarDinheiro(valor)} adicionado para **${nome}**`);
+    db.get('SELECT * FROM ranking WHERE userId = ?', [user.id], (err, row) => {
+      if (row) {
+        db.run(
+          'UPDATE ranking SET money = ?, username = ? WHERE userId = ?',
+          [row.money + valor, nome, user.id]
+        );
+      } else {
+        db.run(
+          'INSERT INTO ranking VALUES (?, ?, ?)',
+          [user.id, nome, valor]
+        );
       }
-    );
+
+      interaction.reply(`✅ ${formatarDinheiro(valor)} adicionado para **${nome}**`);
+    });
   }
 
   if (commandName === 'setdinheiro') {
