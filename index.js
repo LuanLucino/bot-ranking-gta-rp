@@ -6,13 +6,14 @@ const {
   SlashCommandBuilder,
   REST,
   Routes,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  EmbedBuilder
 } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 
 // ================== CONFIG ==================
-const CANAL_ANUNCIO_ID = '1450842612557938769';
+const CANAL_ANUNCIO_ID = '1450842612557938769'; // canal correto
 // ============================================
 
 // ---------- CLIENT ----------
@@ -41,7 +42,7 @@ db.serialize(() => {
   `);
 });
 
-// ---------- FORMATAR DINHEIRO ----------
+// ---------- UTIL ----------
 function formatarDinheiro(valor) {
   return `R$ ${valor.toLocaleString('pt-BR')}`;
 }
@@ -82,63 +83,64 @@ function resetSemanalAutomatico() {
   );
 }
 
-// ---------- ANÚNCIO AUTOMÁTICO ----------
-const { EmbedBuilder } = require('discord.js');
-
+// ---------- ANÚNCIO TOP 3 ----------
 async function anunciarTop3() {
-  const canal = await client.channels.fetch(process.env.CANAL_ANUNCIO_ID);
-  if (!canal) return;
+  try {
+    const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
+    if (!canal) return;
 
-  db.all(
-    'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
-    [],
-    (err, rows) => {
-      if (err || !rows || rows.length === 0) {
-        canal.send('📭 Não há dados suficientes para gerar o TOP 3.');
-        return;
-      }
+    db.all(
+      'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
+      [],
+      (err, rows) => {
+        if (err || !rows || rows.length === 0) {
+          canal.send('📭 Não há dados suficientes para gerar o TOP 3.');
+          return;
+        }
 
-      const medalhas = ['🥇', '🥈', '🥉'];
+        const medalhas = ['🥇', '🥈', '🥉'];
 
-      const embed = new EmbedBuilder()
-        .setTitle('🏆 TOP 3 DA SEMANA — GTA RP')
-        .setDescription('Resultado oficial do ranking financeiro semanal')
-        .setColor(0xFFD700)
-        .setFooter({
-          text: `Semana encerrada em ${new Date().toLocaleDateString('pt-BR')}`
-        })
-        .setTimestamp();
+        const embed = new EmbedBuilder()
+          .setTitle('🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI')
+          .setDescription(
+            'Resultado oficial do **ranking financeiro semanal**.\n' +
+            'Parabéns aos membros que mais se destacaram esta semana.'
+          )
+          .setColor(0xFFD700)
+          .setThumbnail('https://i.imgur.com/8QfZQbT.png') // troque pela sua logo
+          .setFooter({
+            text: `Semana encerrada em ${new Date().toLocaleString('pt-BR')}`
+          })
+          .setTimestamp();
 
-      rows.forEach((r, i) => {
-        embed.addFields({
-          name: `${medalhas[i]} ${r.username}`,
-          value: formatarDinheiro(r.money),
-          inline: false
+        rows.forEach((r, i) => {
+          embed.addFields({
+            name: `${medalhas[i]} ${r.username}`,
+            value: `💰 **${formatarDinheiro(r.money)}**`,
+            inline: false
+          });
         });
-      });
 
-      canal.send({ embeds: [embed] });
-    }
-  );
+        canal.send({ embeds: [embed] });
+        console.log('📢 Anúncio do TOP 3 enviado com sucesso.');
+      }
+    );
+  } catch (e) {
+    console.error('Erro ao anunciar TOP 3:', e);
+  }
 }
 
-
 // ---------- CRONS ----------
+
 // Reset semanal → segunda 00:00 BR (03:00 UTC)
 cron.schedule('0 3 * * 1', () => {
   resetSemanalAutomatico();
 });
 
-// Anúncio TOP 3 → domingo 19:00 BR (22:00 UTC)
+// Anúncio semanal → domingo 19:00 BR (22:00 UTC)
 cron.schedule('0 22 * * 0', () => {
   anunciarTop3();
 });
-
-
-
-
-
-
 
 // ---------- COMMANDS ----------
 const commands = [
@@ -185,7 +187,6 @@ client.once('ready', async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
-
 // ---------- INTERACTIONS ----------
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
@@ -224,9 +225,7 @@ client.on('interactionCreate', async interaction => {
         let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
 
         rows.forEach((r, i) => {
-          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(
-            r.money
-          )}\n`;
+          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
         });
 
         interaction.reply(msg);
@@ -256,9 +255,7 @@ client.on('interactionCreate', async interaction => {
           );
         }
 
-        interaction.reply(
-          `✅ ${formatarDinheiro(valor)} adicionado para **${nome}**`
-        );
+        interaction.reply(`✅ ${formatarDinheiro(valor)} adicionado para **${nome}**`);
       }
     );
   }
@@ -279,9 +276,7 @@ client.on('interactionCreate', async interaction => {
       [user.id, nome, valor]
     );
 
-    interaction.reply(
-      `✏️ Valor definido como ${formatarDinheiro(valor)} para **${nome}**`
-    );
+    interaction.reply(`✏️ Valor definido como ${formatarDinheiro(valor)} para **${nome}**`);
   }
 });
 
