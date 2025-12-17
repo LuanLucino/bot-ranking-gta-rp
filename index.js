@@ -184,7 +184,7 @@ const commands = [
 client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-  const GUILD_ID = '1450842612557938769';
+  const GUILD_ID = '1399382584101703723';
 
 await rest.put(
   Routes.applicationGuildCommands(client.user.id, GUILD_ID),
