@@ -135,10 +135,12 @@ cron.schedule('0 3 * * 1', () => {
 //});
 
 
-// TESTE – Hoje às 15:17 BR (18:17 UTC)
-cron.schedule('17 18 * * *', () => {
+
+// TESTE – Hoje às 15:30 BR (18:30 UTC)
+cron.schedule('30 18 * * *', () => {
   anunciarTop3();
 });
+
 
 
 
@@ -187,12 +189,9 @@ client.once('ready', async () => {
   );
 
   console.log(`✅ Bot online como ${client.user.tag}`);
-
-  // TESTE IMEDIATO
-  setTimeout(() => {
-    anunciarTop3();
-  }, 15000);
 });
+
+
 
 
 
