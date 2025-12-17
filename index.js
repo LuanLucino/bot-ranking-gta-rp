@@ -184,10 +184,13 @@ const commands = [
 client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-  await rest.put(
-    Routes.applicationCommands(client.user.id),
-    { body: commands }
-  );
+  const GUILD_ID = '1450842612557938769';
+
+await rest.put(
+  Routes.applicationGuildCommands(client.user.id, GUILD_ID),
+  { body: commands }
+);
+
 
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
