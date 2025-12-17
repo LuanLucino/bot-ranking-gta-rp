@@ -83,40 +83,45 @@ function resetSemanalAutomatico() {
 }
 
 // ---------- ANÚNCIO AUTOMÁTICO ----------
-function anunciarTop3() {
-  const canal = client.channels.cache.get(CANAL_ANUNCIO_ID);
-  if (!canal) {
-    console.log('❌ Canal de anúncio não encontrado.');
-    return;
-  }
+const { EmbedBuilder } = require('discord.js');
+
+async function anunciarTop3() {
+  const canal = await client.channels.fetch(process.env.CANAL_ANUNCIO_ID);
+  if (!canal) return;
 
   db.all(
-    'SELECT * FROM ranking ORDER BY money DESC LIMIT 3',
+    'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
     [],
     (err, rows) => {
-      if (!rows || rows.length === 0) {
-        canal.send('📭 Não houve movimentação financeira nesta semana.');
+      if (err || !rows || rows.length === 0) {
+        canal.send('📭 Não há dados suficientes para gerar o TOP 3.');
         return;
       }
 
       const medalhas = ['🥇', '🥈', '🥉'];
 
-      let mensagem =
-        '📢 **RESULTADO SEMANAL — TOP 3 QUE MAIS FARMARAM**\n\n';
+      const embed = new EmbedBuilder()
+        .setTitle('🏆 TOP 3 DA SEMANA — GTA RP')
+        .setDescription('Resultado oficial do ranking financeiro semanal')
+        .setColor(0xFFD700)
+        .setFooter({
+          text: `Semana encerrada em ${new Date().toLocaleDateString('pt-BR')}`
+        })
+        .setTimestamp();
 
       rows.forEach((r, i) => {
-        mensagem += `${medalhas[i]} **${r.username}** — ${formatarDinheiro(
-          r.money
-        )}\n`;
+        embed.addFields({
+          name: `${medalhas[i]} ${r.username}`,
+          value: formatarDinheiro(r.money),
+          inline: false
+        });
       });
 
-      mensagem += '\n🔥 Parabéns aos destaques da semana!';
-
-      canal.send(mensagem);
-      console.log('📢 Anúncio do TOP 3 enviado.');
+      canal.send({ embeds: [embed] });
     }
   );
 }
+
 
 // ---------- CRONS ----------
 // Reset semanal → segunda 00:00 BR (03:00 UTC)
