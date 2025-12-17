@@ -47,7 +47,7 @@ function formatarDinheiro(valor) {
   return `R$ ${valor.toLocaleString('pt-BR')}`;
 }
 
-// ---------- RESET SEMANAL (FUNÇÃO REUTILIZÁVEL) ----------
+// ---------- RESET SEMANAL ----------
 function resetSemanalAutomatico() {
   console.log('⏳ Executando reset semanal...');
 
@@ -88,7 +88,7 @@ function resetSemanalAutomatico() {
   );
 }
 
-// ---------- CRON (DOMINGO 23:59 BR = SEGUNDA 02:59 UTC) ----------
+// ---------- CRON RESET (DOMINGO 23:59 BR = SEGUNDA 02:59 UTC) ----------
 cron.schedule('59 2 * * 1', () => {
   resetSemanalAutomatico();
 });
@@ -97,11 +97,17 @@ cron.schedule('59 2 * * 1', () => {
 const commands = [
   new SlashCommandBuilder()
     .setName('ranking')
-    .setDescription('Mostra o ranking semanal'),
-
-  new SlashCommandBuilder()
-    .setName('topmes')
-    .setDescription('Mostra o TOP 3 mensal'),
+    .setDescription('Mostra o ranking')
+    .addSubcommand(sub =>
+      sub
+        .setName('semanal')
+        .setDescription('Mostra o ranking semanal')
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('mensal')
+        .setDescription('Mostra o ranking mensal (TOP 3)')
+    ),
 
   new SlashCommandBuilder()
     .setName('adddinheiro')
@@ -149,61 +155,61 @@ client.on('interactionCreate', async interaction => {
 
   const { commandName, guild } = interaction;
 
+  // ---------- RANKING ----------
   if (commandName === 'ranking') {
-  let sub;
-try {
-  sub = interaction.options.getSubcommand();
-} catch {
-  return interaction.reply({
-    content: '❌ Use `/ranking semanal` ou `/ranking mensal`.',
-    ephemeral: true
-  });
-}
+    let sub;
 
+    try {
+      sub = interaction.options.getSubcommand();
+    } catch {
+      return interaction.reply({
+        content: '❌ Use `/ranking semanal` ou `/ranking mensal`.',
+        flags: 64
+      });
+    }
 
-  // ---------- RANKING SEMANAL ----------
-  if (sub === 'semanal') {
-    db.all(
-      'SELECT * FROM ranking ORDER BY money DESC',
-      [],
-      (err, rows) => {
-        if (!rows || rows.length === 0) {
-          return interaction.reply('📭 Ranking semanal vazio.');
+    // SEMANAL
+    if (sub === 'semanal') {
+      db.all(
+        'SELECT * FROM ranking ORDER BY money DESC',
+        [],
+        (err, rows) => {
+          if (!rows || rows.length === 0) {
+            return interaction.reply('📭 Ranking semanal vazio.');
+          }
+
+          let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
+          rows.forEach((r, i) => {
+            msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
+          });
+
+          interaction.reply(msg);
         }
+      );
+    }
 
-        let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
-        rows.forEach((r, i) => {
-          msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
-        });
+    // MENSAL
+    if (sub === 'mensal') {
+      db.all(
+        'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
+        [],
+        (err, rows) => {
+          if (!rows || rows.length === 0) {
+            return interaction.reply('📭 Ranking mensal vazio.');
+          }
 
-        interaction.reply(msg);
-      }
-    );
-  }
+          const medalhas = ['🥇', '🥈', '🥉'];
+          let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
 
-  // ---------- RANKING MENSAL ----------
-  if (sub === 'mensal') {
-    db.all(
-      'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
-      [],
-      (err, rows) => {
-        if (!rows || rows.length === 0) {
-          return interaction.reply('📭 Ranking mensal vazio.');
+          rows.forEach((r, i) => {
+            msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
+          });
+
+          interaction.reply(msg);
         }
-
-        const medalhas = ['🥇', '🥈', '🥉'];
-        let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
-
-        rows.forEach((r, i) => {
-          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
-        });
-
-        interaction.reply(msg);
-      }
-    );
+      );
+    }
   }
-}
-
 
   // ---------- ADD DINHEIRO ----------
   if (commandName === 'adddinheiro') {
@@ -214,7 +220,7 @@ try {
     if (valor <= 0) {
       return interaction.reply({
         content: '❌ O valor deve ser maior que zero.',
-        ephemeral: true
+        flags: 64
       });
     }
 
