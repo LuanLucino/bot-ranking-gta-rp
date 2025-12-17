@@ -182,7 +182,6 @@ client.once('ready', async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
-anunciarTop3();
 
 // ---------- INTERACTIONS ----------
 client.on('interactionCreate', async interaction => {
