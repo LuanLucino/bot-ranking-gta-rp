@@ -1,7 +1,8 @@
 // index.js
 // Bot de Ranking Financeiro GTA RP
 // Discord.js v14 + SQLite
-// Ranking semanal + Top 3 mensal acumulado
+// Ranking semanal + Ranking mensal acumulado (TOP 3)
+// Reset automático semanal (domingo 23:59 BR)
 
 require('dotenv').config();
 const {
@@ -13,6 +14,7 @@ const {
   PermissionFlagsBits
 } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
+const cron = require('node-cron');
 
 // ---------- CLIENT ----------
 const client = new Client({
@@ -40,10 +42,56 @@ db.serialize(() => {
   `);
 });
 
-// ---------- FORMATAR DINHEIRO ----------
+// ---------- FORMATAR DINHEIRO (SEM CENTAVOS) ----------
 function formatarDinheiro(valor) {
   return `R$ ${valor.toLocaleString('pt-BR')}`;
 }
+
+// ---------- RESET SEMANAL (FUNÇÃO REUTILIZÁVEL) ----------
+function resetSemanalAutomatico() {
+  console.log('⏳ Executando reset semanal...');
+
+  db.all(
+    'SELECT * FROM ranking ORDER BY money DESC LIMIT 3',
+    [],
+    (err, top3) => {
+      if (err) {
+        console.error('Erro ao buscar TOP 3 semanal:', err);
+        return;
+      }
+
+      if (top3 && top3.length > 0) {
+        top3.forEach(u => {
+          db.get(
+            'SELECT * FROM ranking_mensal WHERE userId = ?',
+            [u.userId],
+            (err, row) => {
+              if (row) {
+                db.run(
+                  'UPDATE ranking_mensal SET money = ?, username = ? WHERE userId = ?',
+                  [row.money + u.money, u.username, u.userId]
+                );
+              } else {
+                db.run(
+                  'INSERT INTO ranking_mensal VALUES (?, ?, ?)',
+                  [u.userId, u.username, u.money]
+                );
+              }
+            }
+          );
+        });
+      }
+
+      db.run('DELETE FROM ranking');
+      console.log('✅ Ranking semanal resetado com sucesso.');
+    }
+  );
+}
+
+// ---------- CRON (DOMINGO 23:59 BR = SEGUNDA 02:59 UTC) ----------
+cron.schedule('59 2 * * 1', () => {
+  resetSemanalAutomatico();
+});
 
 // ---------- COMMANDS ----------
 const commands = [
@@ -57,18 +105,18 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('adddinheiro')
-    .setDescription('Adiciona dinheiro (ranking semanal)')
+    .setDescription('Adiciona dinheiro ao ranking semanal')
     .addUserOption(opt =>
       opt.setName('usuario').setDescription('Usuário').setRequired(true)
     )
     .addIntegerOption(opt =>
-      opt.setName('valor').setDescription('Valor a adicionar').setRequired(true)
+      opt.setName('valor').setDescription('Valor').setRequired(true)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('setdinheiro')
-    .setDescription('Define um valor fixo (ranking semanal)')
+    .setDescription('Define um valor fixo no ranking semanal')
     .addUserOption(opt =>
       opt.setName('usuario').setDescription('Usuário').setRequired(true)
     )
@@ -79,7 +127,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('resetranking')
-    .setDescription('Salva TOP 3 da semana e reseta o ranking semanal')
+    .setDescription('Reseta manualmente o ranking semanal')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 ].map(cmd => cmd.toJSON());
 
@@ -131,8 +179,8 @@ client.on('interactionCreate', async interaction => {
           return interaction.reply('📭 Ranking mensal vazio.');
         }
 
-        let msg = '🏆 **TOP 3 MENSAL — GTA RP**\n\n';
         const medalhas = ['🥇', '🥈', '🥉'];
+        let msg = '🏆 **TOP 3 MENSAL — GTA RP**\n\n';
 
         rows.forEach((r, i) => {
           msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
@@ -203,41 +251,10 @@ client.on('interactionCreate', async interaction => {
     );
   }
 
-  // ---------- RESET SEMANAL ----------
+  // ---------- RESET MANUAL ----------
   if (commandName === 'resetranking') {
-    db.all(
-      'SELECT * FROM ranking ORDER BY money DESC LIMIT 3',
-      [],
-      (err, top3) => {
-        if (top3 && top3.length > 0) {
-          top3.forEach(u => {
-            db.get(
-              'SELECT * FROM ranking_mensal WHERE userId = ?',
-              [u.userId],
-              (err, row) => {
-                if (row) {
-                  db.run(
-                    'UPDATE ranking_mensal SET money = ?, username = ? WHERE userId = ?',
-                    [row.money + u.money, u.username, u.userId]
-                  );
-                } else {
-                  db.run(
-                    'INSERT INTO ranking_mensal VALUES (?, ?, ?)',
-                    [u.userId, u.username, u.money]
-                  );
-                }
-              }
-            );
-          });
-        }
-
-        db.run('DELETE FROM ranking');
-
-        interaction.reply(
-          '♻️ Ranking semanal resetado e TOP 3 salvo no ranking mensal.'
-        );
-      }
-    );
+    resetSemanalAutomatico();
+    interaction.reply('♻️ Ranking semanal resetado manualmente.');
   }
 });
 
