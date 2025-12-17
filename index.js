@@ -1,8 +1,8 @@
 // index.js
 // Bot de Ranking Financeiro GTA RP
 // Discord.js v14 + SQLite
-// Ranking semanal + Ranking mensal acumulado (TOP 3)
-// Reset automático semanal (domingo 23:59 BR)
+// Ranking semanal + Ranking mensal
+// Reset automático semanal
 
 require('dotenv').config();
 const {
@@ -42,24 +42,19 @@ db.serialize(() => {
   `);
 });
 
-// ---------- FORMATAR DINHEIRO (SEM CENTAVOS) ----------
+// ---------- FORMATAR DINHEIRO ----------
 function formatarDinheiro(valor) {
   return `R$ ${valor.toLocaleString('pt-BR')}`;
 }
 
 // ---------- RESET SEMANAL ----------
 function resetSemanalAutomatico() {
-  console.log('⏳ Executando reset semanal...');
+  console.log('⏳ Reset semanal iniciado...');
 
   db.all(
     'SELECT * FROM ranking ORDER BY money DESC LIMIT 3',
     [],
     (err, top3) => {
-      if (err) {
-        console.error('Erro ao buscar TOP 3 semanal:', err);
-        return;
-      }
-
       if (top3 && top3.length > 0) {
         top3.forEach(u => {
           db.get(
@@ -83,13 +78,13 @@ function resetSemanalAutomatico() {
       }
 
       db.run('DELETE FROM ranking');
-      console.log('✅ Ranking semanal resetado com sucesso.');
+      console.log('✅ Ranking semanal resetado.');
     }
   );
 }
 
-// ---------- CRON RESET (DOMINGO 23:59 BR = SEGUNDA 02:59 UTC) ----------
-cron.schedule('59 2 * * 1', () => {
+// ---------- CRON (SEGUNDA 00:00 BR = 03:00 UTC) ----------
+cron.schedule('0 3 * * 1', () => {
   resetSemanalAutomatico();
 });
 
@@ -97,47 +92,36 @@ cron.schedule('59 2 * * 1', () => {
 const commands = [
   new SlashCommandBuilder()
     .setName('ranking')
-    .setDescription('Mostra o ranking')
-    .addSubcommand(sub =>
-      sub
-        .setName('semanal')
-        .setDescription('Mostra o ranking semanal')
-    )
-    .addSubcommand(sub =>
-      sub
-        .setName('mensal')
-        .setDescription('Mostra o ranking mensal (TOP 3)')
-    ),
+    .setDescription('Mostra o ranking semanal'),
+
+  new SlashCommandBuilder()
+    .setName('rankingmensal')
+    .setDescription('Mostra o ranking mensal'),
 
   new SlashCommandBuilder()
     .setName('adddinheiro')
     .setDescription('Adiciona dinheiro ao ranking semanal')
-    .addUserOption(opt =>
-      opt.setName('usuario').setDescription('Usuário').setRequired(true)
+    .addUserOption(o =>
+      o.setName('usuario').setDescription('Usuário').setRequired(true)
     )
-    .addIntegerOption(opt =>
-      opt.setName('valor').setDescription('Valor').setRequired(true)
+    .addIntegerOption(o =>
+      o.setName('valor').setDescription('Valor').setRequired(true)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('setdinheiro')
-    .setDescription('Define um valor fixo no ranking semanal')
-    .addUserOption(opt =>
-      opt.setName('usuario').setDescription('Usuário').setRequired(true)
+    .setDescription('Define valor no ranking semanal')
+    .addUserOption(o =>
+      o.setName('usuario').setDescription('Usuário').setRequired(true)
     )
-    .addIntegerOption(opt =>
-      opt.setName('valor').setDescription('Valor').setRequired(true)
+    .addIntegerOption(o =>
+      o.setName('valor').setDescription('Valor').setRequired(true)
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-  new SlashCommandBuilder()
-    .setName('resetranking')
-    .setDescription('Reseta manualmente o ranking semanal')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-].map(cmd => cmd.toJSON());
+].map(c => c.toJSON());
 
-// ---------- REGISTER COMMANDS ----------
+// ---------- REGISTER ----------
 client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
@@ -155,75 +139,50 @@ client.on('interactionCreate', async interaction => {
 
   const { commandName, guild } = interaction;
 
-  // ---------- RANKING ----------
   if (commandName === 'ranking') {
-    let sub;
-
-    try {
-      sub = interaction.options.getSubcommand();
-    } catch {
-      return interaction.reply({
-        content: '❌ Use `/ranking semanal` ou `/ranking mensal`.',
-        flags: 64
-      });
-    }
-
-    // SEMANAL
-    if (sub === 'semanal') {
-      db.all(
-        'SELECT * FROM ranking ORDER BY money DESC',
-        [],
-        (err, rows) => {
-          if (!rows || rows.length === 0) {
-            return interaction.reply('📭 Ranking semanal vazio.');
-          }
-
-          let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
-          rows.forEach((r, i) => {
-            msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
-          });
-
-          interaction.reply(msg);
+    db.all(
+      'SELECT * FROM ranking ORDER BY money DESC',
+      [],
+      (err, rows) => {
+        if (!rows || rows.length === 0) {
+          return interaction.reply('📭 Ranking semanal vazio.');
         }
-      );
-    }
 
-    // MENSAL
-    if (sub === 'mensal') {
-      db.all(
-        'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
-        [],
-        (err, rows) => {
-          if (!rows || rows.length === 0) {
-            return interaction.reply('📭 Ranking mensal vazio.');
-          }
+        let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
+        rows.forEach((r, i) => {
+          msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
+        });
 
-          const medalhas = ['🥇', '🥈', '🥉'];
-          let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
-
-          rows.forEach((r, i) => {
-            msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
-          });
-
-          interaction.reply(msg);
-        }
-      );
-    }
+        interaction.reply(msg);
+      }
+    );
   }
 
-  // ---------- ADD DINHEIRO ----------
+  if (commandName === 'rankingmensal') {
+    db.all(
+      'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
+      [],
+      (err, rows) => {
+        if (!rows || rows.length === 0) {
+          return interaction.reply('📭 Ranking mensal vazio.');
+        }
+
+        const medalhas = ['🥇', '🥈', '🥉'];
+        let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
+
+        rows.forEach((r, i) => {
+          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
+        });
+
+        interaction.reply(msg);
+      }
+    );
+  }
+
   if (commandName === 'adddinheiro') {
     const user = interaction.options.getUser('usuario');
     const member = await guild.members.fetch(user.id);
     const valor = interaction.options.getInteger('valor');
-
-    if (valor <= 0) {
-      return interaction.reply({
-        content: '❌ O valor deve ser maior que zero.',
-        flags: 64
-      });
-    }
-
     const nome = member.nickname ?? user.username;
 
     db.get(
@@ -243,13 +202,12 @@ client.on('interactionCreate', async interaction => {
         }
 
         interaction.reply(
-          `✅ Valor de ${formatarDinheiro(valor)} adicionado para **${nome}**`
+          `✅ ${formatarDinheiro(valor)} adicionado para **${nome}**`
         );
       }
     );
   }
 
-  // ---------- SET DINHEIRO ----------
   if (commandName === 'setdinheiro') {
     const user = interaction.options.getUser('usuario');
     const member = await guild.members.fetch(user.id);
@@ -269,12 +227,6 @@ client.on('interactionCreate', async interaction => {
     interaction.reply(
       `✏️ Valor definido como ${formatarDinheiro(valor)} para **${nome}**`
     );
-  }
-
-  // ---------- RESET MANUAL ----------
-  if (commandName === 'resetranking') {
-    resetSemanalAutomatico();
-    interaction.reply('♻️ Ranking semanal resetado manualmente.');
   }
 });
 
