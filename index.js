@@ -187,7 +187,13 @@ client.once('ready', async () => {
   );
 
   console.log(`✅ Bot online como ${client.user.tag}`);
+
+  // TESTE IMEDIATO
+  setTimeout(() => {
+    anunciarTop3();
+  }, 15000);
 });
+
 
 
 // ---------- INTERACTIONS ----------
