@@ -1,9 +1,4 @@
 // index.js
-// Bot de Ranking Financeiro GTA RP
-// Discord.js v14 + SQLite
-// Ranking semanal + Ranking mensal
-// Reset automático semanal
-
 require('dotenv').config();
 const {
   Client,
@@ -15,6 +10,10 @@ const {
 } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
+
+// ================== CONFIG ==================
+const CANAL_ANUNCIO_ID = '1450842612557938769';
+// ============================================
 
 // ---------- CLIENT ----------
 const client = new Client({
@@ -83,10 +82,58 @@ function resetSemanalAutomatico() {
   );
 }
 
-// ---------- CRON (SEGUNDA 00:00 BR = 03:00 UTC) ----------
+// ---------- ANÚNCIO AUTOMÁTICO ----------
+function anunciarTop3() {
+  const canal = client.channels.cache.get(CANAL_ANUNCIO_ID);
+  if (!canal) {
+    console.log('❌ Canal de anúncio não encontrado.');
+    return;
+  }
+
+  db.all(
+    'SELECT * FROM ranking ORDER BY money DESC LIMIT 3',
+    [],
+    (err, rows) => {
+      if (!rows || rows.length === 0) {
+        canal.send('📭 Não houve movimentação financeira nesta semana.');
+        return;
+      }
+
+      const medalhas = ['🥇', '🥈', '🥉'];
+
+      let mensagem =
+        '📢 **RESULTADO SEMANAL — TOP 3 QUE MAIS FARMARAM**\n\n';
+
+      rows.forEach((r, i) => {
+        mensagem += `${medalhas[i]} **${r.username}** — ${formatarDinheiro(
+          r.money
+        )}\n`;
+      });
+
+      mensagem += '\n🔥 Parabéns aos destaques da semana!';
+
+      canal.send(mensagem);
+      console.log('📢 Anúncio do TOP 3 enviado.');
+    }
+  );
+}
+
+// ---------- CRONS ----------
+// Reset semanal → segunda 00:00 BR (03:00 UTC)
 cron.schedule('0 3 * * 1', () => {
   resetSemanalAutomatico();
 });
+
+// Anúncio TOP 3 → domingo 19:00 BR (22:00 UTC)
+//cron.schedule('0 22 * * 0', () => {
+  //anunciarTop3();
+//});
+
+// TESTE – Hoje às 14:40 BR (17:40 UTC)
+cron.schedule('40 17 * * *', () => {
+  anunciarTop3();
+});
+
 
 // ---------- COMMANDS ----------
 const commands = [
@@ -121,7 +168,7 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 ].map(c => c.toJSON());
 
-// ---------- REGISTER ----------
+// ---------- READY ----------
 client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
@@ -171,7 +218,9 @@ client.on('interactionCreate', async interaction => {
         let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
 
         rows.forEach((r, i) => {
-          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
+          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(
+            r.money
+          )}\n`;
         });
 
         interaction.reply(msg);
