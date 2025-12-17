@@ -149,8 +149,11 @@ client.on('interactionCreate', async interaction => {
 
   const { commandName, guild } = interaction;
 
-  // ---------- RANKING SEMANAL ----------
   if (commandName === 'ranking') {
+  const sub = interaction.options.getSubcommand();
+
+  // ---------- RANKING SEMANAL ----------
+  if (sub === 'semanal') {
     db.all(
       'SELECT * FROM ranking ORDER BY money DESC',
       [],
@@ -169,8 +172,8 @@ client.on('interactionCreate', async interaction => {
     );
   }
 
-  // ---------- TOP MENSAL ----------
-  if (commandName === 'topmes') {
+  // ---------- RANKING MENSAL ----------
+  if (sub === 'mensal') {
     db.all(
       'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
       [],
@@ -180,7 +183,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         const medalhas = ['🥇', '🥈', '🥉'];
-        let msg = '🏆 **TOP 3 MENSAL — GTA RP**\n\n';
+        let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
 
         rows.forEach((r, i) => {
           msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
@@ -190,6 +193,8 @@ client.on('interactionCreate', async interaction => {
       }
     );
   }
+}
+
 
   // ---------- ADD DINHEIRO ----------
   if (commandName === 'adddinheiro') {
