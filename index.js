@@ -42,10 +42,7 @@ db.serialize(() => {
 
 // ---------- FORMATAR DINHEIRO ----------
 function formatarDinheiro(valor) {
-  return valor.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  });
+  return `R$ ${valor.toLocaleString('pt-BR')}`;
 }
 
 // ---------- COMMANDS ----------
