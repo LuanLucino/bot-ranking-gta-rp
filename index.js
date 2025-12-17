@@ -150,7 +150,16 @@ client.on('interactionCreate', async interaction => {
   const { commandName, guild } = interaction;
 
   if (commandName === 'ranking') {
-  const sub = interaction.options.getSubcommand();
+  let sub;
+try {
+  sub = interaction.options.getSubcommand();
+} catch {
+  return interaction.reply({
+    content: '❌ Use `/ranking semanal` ou `/ranking mensal`.',
+    ephemeral: true
+  });
+}
+
 
   // ---------- RANKING SEMANAL ----------
   if (sub === 'semanal') {
