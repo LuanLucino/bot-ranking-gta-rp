@@ -1,3 +1,4 @@
+// index.js
 require('dotenv').config();
 const {
   Client,
@@ -5,8 +6,7 @@ const {
   SlashCommandBuilder,
   REST,
   Routes,
-  PermissionFlagsBits,
-  EmbedBuilder
+  PermissionFlagsBits
 } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
@@ -83,20 +83,17 @@ function resetSemanalAutomatico() {
 }
 
 // ---------- ANÚNCIO AUTOMÁTICO ----------
-async function anunciarTop3() {
-  if (!client.isReady()) return;
+const { EmbedBuilder } = require('discord.js');
 
-  const canal = await client.channels.fetch(CANAL_ANUNCIO_ID).catch(() => null);
-  if (!canal) {
-    console.log('❌ Canal de anúncio não encontrado.');
-    return;
-  }
+async function anunciarTop3() {
+  const canal = await client.channels.fetch(process.env.CANAL_ANUNCIO_ID);
+  if (!canal) return;
 
   db.all(
     'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
     [],
     (err, rows) => {
-      if (!rows || rows.length === 0) {
+      if (err || !rows || rows.length === 0) {
         canal.send('📭 Não há dados suficientes para gerar o TOP 3.');
         return;
       }
@@ -125,17 +122,23 @@ async function anunciarTop3() {
   );
 }
 
-// ---------- CRONS ----------
 
-// Reset semanal → segunda 00:00 BR
+// ---------- CRONS ----------
+// Reset semanal → segunda 00:00 BR (03:00 UTC)
 cron.schedule('0 3 * * 1', () => {
   resetSemanalAutomatico();
 });
 
-// TESTE – hoje às 15:30 BR
-cron.schedule('30 18 * * *', () => {
+// Anúncio TOP 3 → domingo 19:00 BR (22:00 UTC)
+cron.schedule('0 22 * * 0', () => {
   anunciarTop3();
 });
+
+
+
+
+
+
 
 // ---------- COMMANDS ----------
 const commands = [
@@ -182,6 +185,7 @@ client.once('ready', async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
+
 // ---------- INTERACTIONS ----------
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
@@ -189,17 +193,22 @@ client.on('interactionCreate', async interaction => {
   const { commandName, guild } = interaction;
 
   if (commandName === 'ranking') {
-    db.all('SELECT * FROM ranking ORDER BY money DESC', [], (err, rows) => {
-      if (!rows || rows.length === 0)
-        return interaction.reply('📭 Ranking semanal vazio.');
+    db.all(
+      'SELECT * FROM ranking ORDER BY money DESC',
+      [],
+      (err, rows) => {
+        if (!rows || rows.length === 0) {
+          return interaction.reply('📭 Ranking semanal vazio.');
+        }
 
-      let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
-      rows.forEach((r, i) => {
-        msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
-      });
+        let msg = '🏆 **RANKING SEMANAL — GTA RP**\n\n';
+        rows.forEach((r, i) => {
+          msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
+        });
 
-      interaction.reply(msg);
-    });
+        interaction.reply(msg);
+      }
+    );
   }
 
   if (commandName === 'rankingmensal') {
@@ -207,14 +216,17 @@ client.on('interactionCreate', async interaction => {
       'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
       [],
       (err, rows) => {
-        if (!rows || rows.length === 0)
+        if (!rows || rows.length === 0) {
           return interaction.reply('📭 Ranking mensal vazio.');
+        }
 
         const medalhas = ['🥇', '🥈', '🥉'];
         let msg = '🏆 **RANKING MENSAL — GTA RP**\n\n';
 
         rows.forEach((r, i) => {
-          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(r.money)}\n`;
+          msg += `${medalhas[i]} ${r.username} — ${formatarDinheiro(
+            r.money
+          )}\n`;
         });
 
         interaction.reply(msg);
@@ -244,7 +256,9 @@ client.on('interactionCreate', async interaction => {
           );
         }
 
-        interaction.reply(`✅ ${formatarDinheiro(valor)} adicionado para **${nome}**`);
+        interaction.reply(
+          `✅ ${formatarDinheiro(valor)} adicionado para **${nome}**`
+        );
       }
     );
   }
@@ -265,7 +279,9 @@ client.on('interactionCreate', async interaction => {
       [user.id, nome, valor]
     );
 
-    interaction.reply(`✏️ Valor definido como ${formatarDinheiro(valor)} para **${nome}**`);
+    interaction.reply(
+      `✏️ Valor definido como ${formatarDinheiro(valor)} para **${nome}**`
+    );
   }
 });
 
