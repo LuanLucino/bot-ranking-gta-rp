@@ -125,14 +125,10 @@ cron.schedule('0 3 * * 1', () => {
 });
 
 // Anúncio TOP 3 → domingo 19:00 BR (22:00 UTC)
-//cron.schedule('0 22 * * 0', () => {
-  //anunciarTop3();
-//});
-
-// TESTE – Hoje às 14:50 BR (17:50 UTC)
-cron.schedule('50 17 * * *', () => {
+cron.schedule('0 22 * * 0', () => {
   anunciarTop3();
 });
+
 
 
 
