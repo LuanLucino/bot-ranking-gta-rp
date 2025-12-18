@@ -1,4 +1,3 @@
-// index.js
 require('dotenv').config();
 const {
   Client,
@@ -26,11 +25,8 @@ const client = new Client({
 
 // ---------- DATABASE ----------
 const db = new sqlite3.Database('./ranking.db', err => {
-  if (err) {
-    console.error('Erro ao abrir o banco:', err);
-  } else {
-    console.log('📦 Banco de dados conectado.');
-  }
+  if (err) console.error(err);
+  else console.log('📦 Banco de dados conectado.');
 });
 
 db.serialize(() => {
@@ -53,10 +49,9 @@ db.serialize(() => {
   console.log('🗄️ Tabelas verificadas/criadas com sucesso.');
 });
 
-
 // ---------- UTIL ----------
-function formatarDinheiro(valor) {
-  return `R$ ${valor.toLocaleString('pt-BR')}`;
+function formatarDinheiro(v) {
+  return `R$ ${v.toLocaleString('pt-BR')}`;
 }
 
 function temPermissao(member) {
@@ -68,13 +63,13 @@ function temPermissao(member) {
 
 // ---------- RESET SEMANAL ----------
 function resetSemanalAutomatico() {
-  db.all('SELECT * FROM ranking ORDER BY money DESC LIMIT 3', [], (err, top3) => {
+  db.all('SELECT * FROM ranking ORDER BY money DESC LIMIT 3', [], (_, top3) => {
     if (top3?.length) {
       top3.forEach(u => {
         db.get(
           'SELECT * FROM ranking_mensal WHERE userId = ?',
           [u.userId],
-          (err, row) => {
+          (_, row) => {
             if (row) {
               db.run(
                 'UPDATE ranking_mensal SET money = ?, username = ? WHERE userId = ?',
@@ -102,11 +97,8 @@ async function anunciarTop3() {
   db.all(
     'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3',
     [],
-    (err, rows) => {
-      if (!rows?.length) {
-        canal.send('📭 Sem dados para o TOP 3.');
-        return;
-      }
+    (_, rows) => {
+      if (!rows?.length) return canal.send('📭 Sem dados para o TOP 3.');
 
       const medalhas = ['🥇', '🥈', '🥉'];
       const embed = new EmbedBuilder()
@@ -126,7 +118,7 @@ async function anunciarTop3() {
   );
 }
 
-// ---------- CRONS ----------
+// ---------- CRON ----------
 cron.schedule('0 3 * * 1', resetSemanalAutomatico);
 cron.schedule('0 22 * * 0', anunciarTop3);
 
@@ -135,32 +127,40 @@ const commands = [
   new SlashCommandBuilder().setName('ajuda').setDescription('Lista de comandos'),
   new SlashCommandBuilder().setName('ranking').setDescription('Ranking semanal'),
   new SlashCommandBuilder().setName('rankingmensal').setDescription('Ranking mensal'),
+
   new SlashCommandBuilder()
     .setName('adddinheiro')
-    .setDescription('Adicionar seu dinheiro ao ranking')
+    .setDescription('Adicionar dinheiro')
     .addIntegerOption(o =>
       o.setName('valor').setDescription('Valor').setRequired(true)
+    )
+    .addUserOption(o =>
+      o.setName('usuario').setDescription('Usuário (gerência apenas)')
     ),
+
   new SlashCommandBuilder().setName('forcar-anuncio').setDescription('Força anúncio'),
   new SlashCommandBuilder().setName('forcar-reset').setDescription('Força reset'),
+
   new SlashCommandBuilder()
     .setName('removedinheiro')
     .setDescription('Remove dinheiro')
-    .addUserOption(o => o.setName('usuario').setDescription('Usuário').setRequired(true))
-    .addIntegerOption(o => o.setName('valor').setDescription('Valor').setRequired(true)),
+    .addUserOption(o => o.setName('usuario').setRequired(true))
+    .addIntegerOption(o => o.setName('valor').setRequired(true)),
+
   new SlashCommandBuilder()
     .setName('setdinheiro')
     .setDescription('Define dinheiro')
-    .addUserOption(o => o.setName('usuario').setDescription('Usuário').setRequired(true))
-    .addIntegerOption(o => o.setName('valor').setDescription('Valor').setRequired(true))
+    .addUserOption(o => o.setName('usuario').setRequired(true))
+    .addIntegerOption(o => o.setName('valor').setRequired(true))
 ].map(c => c.toJSON());
 
 // ---------- READY ----------
 client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
-    body: commands
-  });
+  await rest.put(
+    Routes.applicationGuildCommands(client.user.id, GUILD_ID),
+    { body: commands }
+  );
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
@@ -172,7 +172,7 @@ client.on('interactionCreate', async interaction => {
   // AJUDA
   if (commandName === 'ajuda') {
     const embed = new EmbedBuilder()
-      .setTitle('📘 Comandos Disponíveis')
+      .setTitle('📘 Painel de Comandos')
       .setColor(0x2f3136)
       .setDescription(
         '**👤 Membros**\n' +
@@ -180,85 +180,80 @@ client.on('interactionCreate', async interaction => {
         '/ranking — Ranking semanal\n' +
         '/rankingmensal — Ranking mensal\n\n' +
         '**🛡️ Gerência / Líder**\n' +
-        '/forcar-anuncio — Forçar anúncio\n' +
-        '/forcar-reset — Forçar reset\n' +
-        '/removedinheiro — Remover dinheiro\n' +
-        '/setdinheiro — Definir dinheiro'
+        '/forcar-anuncio\n/forcar-reset\n/removedinheiro\n/setdinheiro'
       );
 
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // PERMISSÃO
-  const comandosRestritos = [
+  // RESTRIÇÃO
+  const restritos = [
     'forcar-anuncio',
     'forcar-reset',
     'removedinheiro',
     'setdinheiro'
   ];
 
-  if (comandosRestritos.includes(commandName) && !temPermissao(member)) {
-    return interaction.reply({
-      content: '⛔ Você não tem permissão para usar este comando.',
-      ephemeral: true
-    });
+  if (restritos.includes(commandName) && !temPermissao(member)) {
+    return interaction.reply({ content: '⛔ Sem permissão.', ephemeral: true });
   }
 
-  // ADDDINHEIRO (MEMBRO)
+  // ADDDINHEIRO
   if (commandName === 'adddinheiro') {
-  const user = interaction.options.getUser('usuario');
-  const valor = interaction.options.getInteger('valor');
+    await interaction.deferReply({ ephemeral: true });
 
-  if (valor <= 0) {
-    return interaction.reply({
-      content: '❌ O valor precisa ser maior que zero.',
-      ephemeral: true
-    });
-  }
+    const valor = interaction.options.getInteger('valor');
+    const usuario = interaction.options.getUser('usuario');
+    const alvo = usuario ?? interaction.user;
 
-  const member = await interaction.guild.members.fetch(interaction.user.id);
-  const targetMember = await interaction.guild.members.fetch(user.id);
-
-  const cargosGerencia = ['GERENCIA_ROLE_ID', 'LIDER_ROLE_ID']; // ajuste aqui
-  const isGerencia = member.roles.cache.some(r => cargosGerencia.includes(r.id));
-
-  // 🔒 MEMBRO só pode adicionar para si mesmo
-  if (!isGerencia && interaction.user.id !== user.id) {
-    return interaction.reply({
-      content: '❌ Você só pode adicionar dinheiro para si mesmo.',
-      ephemeral: true
-    });
-  }
-
-  const nome = targetMember.nickname ?? user.username;
-
-  db.get(
-    'SELECT * FROM ranking WHERE userId = ?',
-    [user.id],
-    (err, row) => {
-      if (err) {
-        console.error(err);
-        return interaction.reply('❌ Erro ao acessar o banco.');
-      }
-
-      if (row) {
-        db.run(
-          'UPDATE ranking SET money = ?, username = ? WHERE userId = ?',
-          [row.money + valor, nome, user.id]
-        );
-      } else {
-        db.run(
-          'INSERT INTO ranking VALUES (?, ?, ?)',
-          [user.id, nome, valor]
-        );
-      }
-
-      interaction.reply(
-        `💰 **${formatarDinheiro(valor)}** adicionado para **${nome}**`
-      );
+    if (!temPermissao(member) && usuario && usuario.id !== interaction.user.id) {
+      return interaction.editReply('❌ Você só pode adicionar para si mesmo.');
     }
-  );
-}
 
+    db.get(
+      'SELECT * FROM ranking WHERE userId = ?',
+      [alvo.id],
+      (_, row) => {
+        const nome = interaction.guild.members.cache.get(alvo.id)?.nickname ?? alvo.username;
+        const novoValor = (row?.money ?? 0) + valor;
+
+        if (row) {
+          db.run('UPDATE ranking SET money = ?, username = ? WHERE userId = ?', [
+            novoValor, nome, alvo.id
+          ]);
+        } else {
+          db.run('INSERT INTO ranking VALUES (?, ?, ?)', [
+            alvo.id, nome, valor
+          ]);
+        }
+
+        interaction.editReply(
+          `💰 **${formatarDinheiro(valor)}** adicionado para **${nome}**`
+        );
+      }
+    );
+  }
+
+  // RANKING
+  if (commandName === 'ranking' || commandName === 'rankingmensal') {
+    await interaction.deferReply();
+    const tabela = commandName === 'ranking' ? 'ranking' : 'ranking_mensal';
+
+    db.all(
+      `SELECT * FROM ${tabela} ORDER BY money DESC`,
+      [],
+      (_, rows) => {
+        if (!rows?.length) return interaction.editReply('📭 Ranking vazio.');
+
+        let msg = '🏆 **RANKING**\n\n';
+        rows.forEach((r, i) => {
+          msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
+        });
+
+        interaction.editReply(msg);
+      }
+    );
+  }
+});
 
 client.login(process.env.TOKEN);
