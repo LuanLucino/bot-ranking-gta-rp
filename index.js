@@ -74,18 +74,15 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("adddinheiro")
-    .setDescription("Adicionar dinheiro (uso geral)")
+    .setDescription("Adicionar dinheiro (com comprovante obrigatório)")
     .addIntegerOption(o =>
       o.setName("valor").setDescription("Valor").setRequired(true)
-    )
-    .addUserOption(o =>
-      o.setName("usuario").setDescription("Usuário (opcional)")
     )
     .addAttachmentOption(o =>
       o
         .setName("comprovante")
-        .setDescription("Imagem de comprovante (opcional)")
-        .setRequired(false)
+        .setDescription("Imagem do comprovante (obrigatório)")
+        .setRequired(true)
     ),
 
   new SlashCommandBuilder()
@@ -138,7 +135,7 @@ client.on("interactionCreate", async interaction => {
         .setDescription(`
 /ranking — Ranking semanal  
 /rankingmensal — Ranking mensal  
-/adddinheiro — Adicionar dinheiro  
+/adddinheiro — Adicionar dinheiro (com comprovante)  
 
 **Gerência / Líder**
 /money — Ajustar valores  
@@ -149,18 +146,14 @@ client.on("interactionCreate", async interaction => {
       return interaction.reply({ embeds: [embed] });
     }
 
-    /* ===== ADD DINHEIRO ===== */
+    /* ===== ADD DINHEIRO (USO GERAL) ===== */
     if (commandName === "adddinheiro") {
       await interaction.deferReply();
 
       const valor = interaction.options.getInteger("valor");
-      const userOpt = interaction.options.getUser("usuario");
       const comprovante = interaction.options.getAttachment("comprovante");
 
-      if (userOpt && !temPermissao(member))
-        return interaction.editReply("⛔ Você só pode adicionar para si mesmo.");
-
-      const alvo = userOpt || interaction.user;
+      const alvo = interaction.user;
       const nickname = nomeNick(guild, alvo);
 
       db.run(
@@ -188,16 +181,13 @@ client.on("interactionCreate", async interaction => {
           { name: "Usuário", value: nickname, inline: true },
           { name: "Valor", value: formatarDinheiro(valor), inline: true }
         )
+        .setImage(comprovante.url)
         .setTimestamp();
-
-      if (comprovante) {
-        embed.setImage(comprovante.url);
-      }
 
       interaction.editReply({ embeds: [embed] });
     }
 
-    /* ===== MONEY ===== */
+    /* ===== MONEY (ADMIN) ===== */
     if (commandName === "money") {
       await interaction.deferReply();
 
@@ -231,17 +221,28 @@ client.on("interactionCreate", async interaction => {
       );
     }
 
-    /* ===== RANKING SEMANAL ===== */
-    if (commandName === "ranking") {
+    /* ===== RANKINGS ===== */
+    if (commandName === "ranking" || commandName === "rankingmensal") {
       await interaction.deferReply();
 
-      db.all("SELECT * FROM ranking ORDER BY money DESC", [], (_, rows) => {
+      const tabela =
+        commandName === "ranking" ? "ranking" : "ranking_mensal";
+
+      const titulo =
+        commandName === "ranking"
+          ? "🏆 RANKING SEMANAL"
+          : "🏆 RANKING MENSAL";
+
+      const cor =
+        commandName === "ranking" ? 0x2f3136 : 0xffd700;
+
+      db.all(`SELECT * FROM ${tabela} ORDER BY money DESC`, [], (_, rows) => {
         if (!rows.length)
-          return interaction.editReply("📭 Ranking semanal vazio.");
+          return interaction.editReply("📭 Ranking vazio.");
 
         const embed = new EmbedBuilder()
-          .setTitle("🏆 RANKING SEMANAL")
-          .setColor(0x2f3136);
+          .setTitle(titulo)
+          .setColor(cor);
 
         rows.forEach((r, i) =>
           embed.addFields({
@@ -254,30 +255,7 @@ client.on("interactionCreate", async interaction => {
       });
     }
 
-    /* ===== RANKING MENSAL ===== */
-    if (commandName === "rankingmensal") {
-      await interaction.deferReply();
-
-      db.all("SELECT * FROM ranking_mensal ORDER BY money DESC", [], (_, rows) => {
-        if (!rows.length)
-          return interaction.editReply("📭 Ranking mensal vazio.");
-
-        const embed = new EmbedBuilder()
-          .setTitle("🏆 RANKING MENSAL")
-          .setColor(0xffd700);
-
-        rows.forEach((r, i) =>
-          embed.addFields({
-            name: `${i + 1}º ${r.username}`,
-            value: formatarDinheiro(r.money)
-          })
-        );
-
-        interaction.editReply({ embeds: [embed] });
-      });
-    }
-
-    /* ===== DELETAR SEMANAL ===== */
+    /* ===== DELETES ===== */
     if (commandName === "deletar-semanal") {
       if (!temPermissao(member))
         return interaction.reply("⛔ Sem permissão.");
@@ -286,7 +264,6 @@ client.on("interactionCreate", async interaction => {
       interaction.reply("🗑️ Ranking semanal resetado.");
     }
 
-    /* ===== DELETAR MENSAL ===== */
     if (commandName === "deletar-mensal") {
       if (!temPermissao(member))
         return interaction.reply("⛔ Sem permissão.");
@@ -296,22 +273,19 @@ client.on("interactionCreate", async interaction => {
     }
 
   } catch (err) {
-    console.error("❌ Erro no comando:", err);
+    console.error("❌ Erro:", err);
 
     if (interaction.deferred || interaction.replied) {
-      interaction.editReply("⚠️ Ocorreu um erro ao executar este comando.");
+      interaction.editReply("⚠️ Erro ao executar o comando.");
     } else {
-      interaction.reply({
-        content: "⚠️ Ocorreu um erro ao executar este comando.",
-        ephemeral: true
-      });
+      interaction.reply({ content: "⚠️ Erro ao executar.", ephemeral: true });
     }
   }
 });
 
 /* ================= CRON JOBS ================= */
 
-// Domingo 19:00 – anunciar TOP 3 semanal
+// Domingo 19h – TOP 3 semanal
 cron.schedule("0 19 * * 0", async () => {
   const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
 
@@ -338,7 +312,7 @@ cron.schedule("0 19 * * 0", async () => {
   );
 }, { timezone: "America/Sao_Paulo" });
 
-// Segunda 00:00 – resetar ranking semanal
+// Segunda 00h – reset semanal
 cron.schedule("0 0 * * 1", () => {
   db.run("DELETE FROM ranking");
   console.log("🔄 Ranking semanal resetado automaticamente.");
