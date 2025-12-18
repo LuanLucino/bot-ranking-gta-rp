@@ -1,236 +1,217 @@
-import {
+// index.js
+require("dotenv").config();
+const {
   Client,
   GatewayIntentBits,
   SlashCommandBuilder,
-  PermissionsBitField,
-  Collection,
-  InteractionType,
-} from "discord.js";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
-import dotenv from "dotenv";
+  REST,
+  Routes,
+  EmbedBuilder
+} = require("discord.js");
+const sqlite3 = require("sqlite3").verbose();
 
-dotenv.config();
+/* ================= CONFIG ================= */
 
-/* =========================
-   CONFIGURAÇÕES
-========================= */
+const GUILD_ID = "1399382584101703723";
 
-const TOKEN = process.env.DISCORD_TOKEN;
+// Cargos
+const CARGO_GERENCIA_ID = "1399390797098520591";
+const CARGO_LIDER_ID = "1399389445546971206";
 
-// IDs de cargos (AJUSTE SE NECESSÁRIO)
-const CARGO_GERENTE = "ID_DO_CARGO_GERENTE";
-const CARGO_LIDER = "ID_DO_CARGO_LIDER";
+/* ========================================== */
 
-/* =========================
-   CLIENT
-========================= */
-
+// CLIENT
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds]
 });
 
-/* =========================
-   BANCO DE DADOS
-========================= */
+// DATABASE
+const db = new sqlite3.Database("./ranking.db");
 
-const db = await open({
-  filename: "./ranking.db",
-  driver: sqlite3.Database,
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ranking (
+      userId TEXT PRIMARY KEY,
+      username TEXT,
+      money INTEGER DEFAULT 0
+    )
+  `);
+
+  console.log("🗄️ Tabelas verificadas/criadas com sucesso.");
 });
 
-await db.exec(`
-  CREATE TABLE IF NOT EXISTS ranking (
-    userId TEXT PRIMARY KEY,
-    dinheiro INTEGER DEFAULT 0
-  );
-`);
-
-console.log("🗄️ Tabelas verificadas/criadas com sucesso.");
-console.log("📦 Banco de dados conectado.");
-
-/* =========================
-   FUNÇÕES AUXILIARES
-========================= */
+/* ================= UTIL ================= */
 
 function formatarDinheiro(valor) {
   return `R$ ${valor.toLocaleString("pt-BR")}`;
 }
 
-function isGerenteOuLider(member) {
+function temPermissao(member) {
   return (
-    member.roles.cache.has(CARGO_GERENTE) ||
-    member.roles.cache.has(CARGO_LIDER)
+    member.roles.cache.has(CARGO_GERENCIA_ID) ||
+    member.roles.cache.has(CARGO_LIDER_ID)
   );
 }
 
-/* =========================
-   COMANDOS
-========================= */
+/* ================= COMMANDS ================= */
 
 const commands = [
   new SlashCommandBuilder()
-    .setName("adddinheiro")
-    .setDescription("Adicionar dinheiro ao ranking")
-    .addUserOption((opt) =>
-      opt
-        .setName("usuario")
-        .setDescription("Usuário que receberá o dinheiro")
-        .setRequired(true)
-    )
-    .addIntegerOption((opt) =>
-      opt
-        .setName("valor")
-        .setDescription("Valor a ser adicionado")
-        .setRequired(true)
-    ),
+    .setName("ajuda")
+    .setDescription("Lista de comandos"),
 
   new SlashCommandBuilder()
     .setName("ranking")
-    .setDescription("Ver o ranking semanal"),
+    .setDescription("Exibe o ranking semanal"),
 
   new SlashCommandBuilder()
     .setName("rankingmensal")
-    .setDescription("Ver o ranking mensal"),
+    .setDescription("Exibe o ranking mensal"),
 
   new SlashCommandBuilder()
-    .setName("ajuda")
-    .setDescription("Exibe o painel de ajuda"),
+    .setName("adddinheiro")
+    .setDescription("Adicionar dinheiro")
+    .addIntegerOption(o =>
+      o.setName("valor").setDescription("Valor").setRequired(true)
+    )
+    .addUserOption(o =>
+      o.setName("usuario").setDescription("Usuário (opcional)").setRequired(false)
+    ),
 
   new SlashCommandBuilder()
     .setName("forcar-anuncio")
-    .setDescription("Força um anúncio manual")
-    .addStringOption((opt) =>
-      opt
-        .setName("mensagem")
-        .setDescription("Mensagem do anúncio")
-        .setRequired(true)
-    ),
-].map((cmd) => cmd.toJSON());
+    .setDescription("Forçar anúncio manual")
+    .addStringOption(o =>
+      o.setName("mensagem").setDescription("Mensagem").setRequired(true)
+    )
+].map(c => c.toJSON());
 
-/* =========================
-   READY
-========================= */
+/* ================= READY ================= */
 
 client.once("ready", async () => {
-  await client.application.commands.set(commands);
+  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+
+  await rest.put(
+    Routes.applicationGuildCommands(client.user.id, GUILD_ID),
+    { body: commands }
+  );
+
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
-/* =========================
-   INTERACTIONS
-========================= */
+/* ================= INTERACTIONS ================= */
 
-client.on("interactionCreate", async (interaction) => {
-  if (interaction.type !== InteractionType.ApplicationCommand) return;
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
-  const { commandName } = interaction;
+  const { commandName, member } = interaction;
 
-  /* ===== ADD DINHEIRO ===== */
+  /* ===== AJUDA ===== */
+  if (commandName === "ajuda") {
+    const embed = new EmbedBuilder()
+      .setTitle("📘 Comandos Disponíveis")
+      .setColor(0x2f3136)
+      .setDescription(
+        "**👤 Membros**\n" +
+        "/adddinheiro — Adicionar seu dinheiro\n" +
+        "/ranking — Ranking semanal\n" +
+        "/rankingmensal — Ranking mensal\n\n" +
+        "**🛡️ Gerência / Líder**\n" +
+        "/forcar-anuncio — Forçar anúncio"
+      );
+
+    return interaction.reply({ embeds: [embed], flags: 64 });
+  }
+
+  /* ===== ADD DINHEIRO (PÚBLICO) ===== */
   if (commandName === "adddinheiro") {
-    await interaction.deferReply(); // PÚBLICO
+    await interaction.deferReply(); // público
 
-    const usuario = interaction.options.getUser("usuario");
     const valor = interaction.options.getInteger("valor");
-    const member = interaction.member;
+    const usuarioOpcional = interaction.options.getUser("usuario");
 
     if (valor <= 0) {
-      return interaction.editReply("❌ O valor precisa ser maior que zero.");
+      return interaction.editReply("❌ Valor inválido.");
     }
 
-    // Regra de permissão
-    if (!isGerenteOuLider(member) && usuario.id !== interaction.user.id) {
-      return interaction.editReply(
-        "❌ Você só pode adicionar dinheiro para si mesmo."
-      );
+    let targetUser = interaction.user;
+
+    if (usuarioOpcional) {
+      if (!temPermissao(member)) {
+        return interaction.editReply(
+          "⛔ Você só pode adicionar dinheiro para si mesmo."
+        );
+      }
+      targetUser = usuarioOpcional;
     }
 
-    // Garante que o usuário existe no banco
-    await db.run(
-      `INSERT OR IGNORE INTO ranking (userId, dinheiro) VALUES (?, 0)`,
-      usuario.id
-    );
+    const nome = targetUser.username;
 
-    // Soma o dinheiro
-    await db.run(
-      `UPDATE ranking SET dinheiro = dinheiro + ? WHERE userId = ?`,
-      valor,
-      usuario.id
-    );
+    db.get(
+      "SELECT * FROM ranking WHERE userId = ?",
+      [targetUser.id],
+      (err, row) => {
+        if (row) {
+          db.run(
+            "UPDATE ranking SET money = money + ? WHERE userId = ?",
+            [valor, targetUser.id]
+          );
+        } else {
+          db.run(
+            "INSERT INTO ranking VALUES (?, ?, ?)",
+            [targetUser.id, nome, valor]
+          );
+        }
 
-    interaction.editReply(
-      `💰 **${formatarDinheiro(valor)}** adicionados ao ranking de **${usuario.username}**`
+        interaction.editReply(
+          `💰 **${formatarDinheiro(valor)}** adicionados para **${nome}**`
+        );
+      }
     );
   }
 
   /* ===== RANKING ===== */
   if (commandName === "ranking") {
-    await interaction.deferReply(); // PÚBLICO
+    await interaction.deferReply();
 
-    const rows = await db.all(
-      `SELECT * FROM ranking ORDER BY dinheiro DESC LIMIT 10`
-    );
+    db.all(
+      "SELECT * FROM ranking ORDER BY money DESC LIMIT 10",
+      [],
+      async (err, rows) => {
+        if (!rows.length) {
+          return interaction.editReply("📭 Ranking vazio.");
+        }
 
-    if (rows.length === 0) {
-      return interaction.editReply("📭 Ranking vazio.");
-    }
+        let texto = "🏆 **Ranking Semanal**\n\n";
 
-    let texto = "🏆 **Ranking Semanal**\n\n";
-    let pos = 1;
+        rows.forEach((r, i) => {
+          texto += `**${i + 1}º** ${r.username} — ${formatarDinheiro(r.money)}\n`;
+        });
 
-    for (const r of rows) {
-      const user = await client.users.fetch(r.userId);
-      texto += `**${pos}º** ${user.username} — ${formatarDinheiro(
-        r.dinheiro
-      )}\n`;
-      pos++;
-    }
-
-    interaction.editReply(texto);
-  }
-
-  /* ===== RANKING MENSAL ===== */
-  if (commandName === "rankingmensal") {
-    await interaction.deferReply(); // PÚBLICO
-    interaction.editReply("📊 Ranking mensal em desenvolvimento.");
-  }
-
-  /* ===== AJUDA ===== */
-  if (commandName === "ajuda") {
-    await interaction.deferReply({ flags: 64 }); // PRIVADO
-
-    interaction.editReply(
-      `
-📌 **Painel de Ajuda**
-
-• /adddinheiro — Adiciona dinheiro ao ranking
-• /ranking — Ranking semanal
-• /rankingmensal — Ranking mensal
-
-👑 **Administração**
-• /forcar-anuncio
-`
+        interaction.editReply(texto);
+      }
     );
   }
 
   /* ===== FORÇAR ANÚNCIO ===== */
   if (commandName === "forcar-anuncio") {
-    await interaction.deferReply({ flags: 64 }); // PRIVADO
-
-    if (!isGerenteOuLider(interaction.member)) {
-      return interaction.editReply("❌ Sem permissão.");
+    if (!temPermissao(member)) {
+      return interaction.reply({
+        content: "⛔ Sem permissão.",
+        flags: 64
+      });
     }
 
     const msg = interaction.options.getString("mensagem");
-
     await interaction.channel.send(`📢 **ANÚNCIO**\n\n${msg}`);
 
-    interaction.editReply("✅ Anúncio enviado com sucesso.");
+    interaction.reply({
+      content: "✅ Anúncio enviado.",
+      flags: 64
+    });
   }
 });
 
-/* =========================
-   LOGIN
-========================= */
+/* ================= LOGIN ================= */
 
-client.login(TOKEN);
+client.login(process.env.TOKEN);
