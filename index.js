@@ -59,31 +59,21 @@ db.serialize(() => {
 
 /* ================= UTIL ================= */
 
-function formatarDinheiro(valor) {
-  return `R$ ${valor.toLocaleString("pt-BR")}`;
-}
+const formatarDinheiro = v => `R$ ${v.toLocaleString("pt-BR")}`;
 
-function temPermissao(member) {
-  return (
-    member.roles.cache.has(CARGO_GERENCIA_ID) ||
-    member.roles.cache.has(CARGO_LIDER_ID)
-  );
-}
+const temPermissao = member =>
+  member.roles.cache.has(CARGO_GERENCIA_ID) ||
+  member.roles.cache.has(CARGO_LIDER_ID);
 
-function nomeExibicao(member, user) {
-  return member?.nickname ?? user.username;
-}
+const nomeExibicao = (member, user) =>
+  member?.nickname ?? user.username;
 
 /* ================= COMMANDS ================= */
 
 const commands = [
   new SlashCommandBuilder().setName("ajuda").setDescription("Lista de comandos"),
-
   new SlashCommandBuilder().setName("ranking").setDescription("Ranking semanal"),
-
-  new SlashCommandBuilder()
-    .setName("rankingmensal")
-    .setDescription("Ranking mensal"),
+  new SlashCommandBuilder().setName("rankingmensal").setDescription("Ranking mensal"),
 
   new SlashCommandBuilder()
     .setName("adddinheiro")
@@ -92,7 +82,7 @@ const commands = [
       o.setName("valor").setDescription("Valor").setRequired(true)
     )
     .addUserOption(o =>
-      o.setName("usuario").setDescription("Usuário (gerência/líder)").setRequired(false)
+      o.setName("usuario").setDescription("Usuário (gerência/líder)")
     ),
 
   new SlashCommandBuilder()
@@ -105,19 +95,17 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("salvar-mes")
-    .setDescription("Salvar ranking mensal atual")
+    .setDescription("Salvar e arquivar ranking mensal")
 ].map(c => c.toJSON());
 
 /* ================= READY ================= */
 
 client.once("ready", async () => {
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-
   await rest.put(
     Routes.applicationGuildCommands(client.user.id, GUILD_ID),
     { body: commands }
   );
-
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
@@ -130,96 +118,50 @@ client.on("interactionCreate", async interaction => {
 
   /* ===== RANKING SEMANAL ===== */
   if (commandName === "ranking") {
-    const rows = await new Promise(res =>
-      db.all("SELECT * FROM ranking ORDER BY money DESC", [], (_, r) => res(r))
-    );
+    await interaction.deferReply();
 
-    if (!rows.length) {
-      return interaction.reply("📭 Ranking semanal vazio.");
-    }
+    db.all("SELECT * FROM ranking ORDER BY money DESC", [], (_, rows) => {
+      if (!rows.length)
+        return interaction.editReply("📭 Ranking semanal vazio.");
 
-    const embed = new EmbedBuilder()
-      .setTitle("🏆 RANKING SEMANAL")
-      .setColor(0x2f3136)
-      .setTimestamp();
+      const embed = new EmbedBuilder()
+        .setTitle("🏆 RANKING SEMANAL")
+        .setColor(0x2f3136)
+        .setTimestamp();
 
-    rows.forEach((r, i) => {
-      embed.addFields({
-        name: `${i + 1}º ${r.username}`,
-        value: formatarDinheiro(r.money),
-        inline: false
-      });
+      rows.forEach((r, i) =>
+        embed.addFields({
+          name: `${i + 1}º ${r.username}`,
+          value: formatarDinheiro(r.money)
+        })
+      );
+
+      interaction.editReply({ embeds: [embed] });
     });
-
-    return interaction.reply({ embeds: [embed] });
   }
 
   /* ===== RANKING MENSAL ===== */
   if (commandName === "rankingmensal") {
-    const rows = await new Promise(res =>
-      db.all(
-        "SELECT * FROM ranking_mensal ORDER BY money DESC",
-        [],
-        (_, r) => res(r)
-      )
-    );
+    await interaction.deferReply();
 
-    if (!rows.length) {
-      return interaction.reply("📭 Ranking mensal vazio.");
-    }
+    db.all("SELECT * FROM ranking_mensal ORDER BY money DESC", [], (_, rows) => {
+      if (!rows.length)
+        return interaction.editReply("📭 Ranking mensal vazio.");
 
-    const embed = new EmbedBuilder()
-      .setTitle("🏆 RANKING MENSAL")
-      .setColor(0xFFD700)
-      .setTimestamp();
+      const embed = new EmbedBuilder()
+        .setTitle("🏆 RANKING MENSAL")
+        .setColor(0xffd700)
+        .setTimestamp();
 
-    rows.forEach((r, i) => {
-      embed.addFields({
-        name: `${i + 1}º ${r.username}`,
-        value: formatarDinheiro(r.money),
-        inline: false
-      });
+      rows.forEach((r, i) =>
+        embed.addFields({
+          name: `${i + 1}º ${r.username}`,
+          value: formatarDinheiro(r.money)
+        })
+      );
+
+      interaction.editReply({ embeds: [embed] });
     });
-
-    return interaction.reply({ embeds: [embed] });
-  }
-
-  /* ===== FORÇAR ANÚNCIO ===== */
-  if (commandName === "forcar-anuncio") {
-    if (!temPermissao(member)) {
-      return interaction.reply({ content: "⛔ Sem permissão.", flags: 64 });
-    }
-
-    const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
-
-    const rows = await new Promise(res =>
-      db.all(
-        "SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3",
-        [],
-        (_, r) => res(r)
-      )
-    );
-
-    if (!rows.length) {
-      return interaction.reply("📭 Sem dados para anunciar.");
-    }
-
-    const medalhas = ["🥇", "🥈", "🥉"];
-    const embed = new EmbedBuilder()
-      .setTitle("🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI")
-      .setColor(0xFFD700)
-      .setTimestamp();
-
-    rows.forEach((r, i) => {
-      embed.addFields({
-        name: `${medalhas[i]} ${r.username}`,
-        value: formatarDinheiro(r.money),
-        inline: false
-      });
-    });
-
-    await canal.send({ embeds: [embed] });
-    return interaction.reply({ content: "📢 Anúncio enviado.", flags: 64 });
   }
 
   /* ===== ADD DINHEIRO ===== */
@@ -233,47 +175,98 @@ client.on("interactionCreate", async interaction => {
     let targetMember = member;
 
     if (userOpt) {
-      if (!temPermissao(member)) {
-        return interaction.editReply("⛔ Você só pode adicionar para si mesmo.");
-      }
+      if (!temPermissao(member))
+        return interaction.editReply("⛔ Sem permissão.");
       targetUser = userOpt;
       targetMember = await guild.members.fetch(userOpt.id);
     }
 
     const nome = nomeExibicao(targetMember, targetUser);
 
-    db.get(
-      "SELECT * FROM ranking WHERE userId = ?",
-      [targetUser.id],
-      (_, row) => {
-        if (row) {
-          db.run(
-            "UPDATE ranking SET money = money + ?, username = ? WHERE userId = ?",
-            [valor, nome, targetUser.id]
-          );
-        } else {
-          db.run(
-            "INSERT INTO ranking VALUES (?, ?, ?)",
-            [targetUser.id, nome, valor]
-          );
+    const atualizar = tabela => {
+      db.get(
+        `SELECT * FROM ${tabela} WHERE userId = ?`,
+        [targetUser.id],
+        (_, row) => {
+          if (row)
+            db.run(
+              `UPDATE ${tabela} SET money = money + ?, username = ? WHERE userId = ?`,
+              [valor, nome, targetUser.id]
+            );
+          else
+            db.run(
+              `INSERT INTO ${tabela} VALUES (?, ?, ?)`,
+              [targetUser.id, nome, valor]
+            );
         }
+      );
+    };
 
+    atualizar("ranking");
+    atualizar("ranking_mensal");
+
+    const embed = new EmbedBuilder()
+      .setTitle("💰 Dinheiro Adicionado")
+      .setColor(0x00ff99)
+      .setDescription(`**${nome}** recebeu ${formatarDinheiro(valor)}`)
+      .setTimestamp();
+
+    interaction.editReply({ embeds: [embed] });
+  }
+
+  /* ===== FORÇAR ANÚNCIO ===== */
+  if (commandName === "forcar-anuncio") {
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!temPermissao(member))
+      return interaction.editReply("⛔ Sem permissão.");
+
+    db.all(
+      "SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3",
+      [],
+      async (_, rows) => {
+        if (!rows.length)
+          return interaction.editReply("📭 Sem dados.");
+
+        const medalhas = ["🥇", "🥈", "🥉"];
         const embed = new EmbedBuilder()
-          .setTitle("💰 Dinheiro Adicionado")
-          .setColor(0x00ff99)
-          .setDescription(`**${nome}** recebeu ${formatarDinheiro(valor)}`)
+          .setTitle("🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI")
+          .setColor(0xffd700)
           .setTimestamp();
 
-        interaction.editReply({ embeds: [embed] });
+        rows.forEach((r, i) =>
+          embed.addFields({
+            name: `${medalhas[i]} ${r.username}`,
+            value: formatarDinheiro(r.money)
+          })
+        );
+
+        const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
+        await canal.send({ embeds: [embed] });
+
+        interaction.editReply("📢 Anúncio enviado.");
       }
+    );
+  }
+
+  /* ===== FORÇAR RESET ===== */
+  if (commandName === "forcar-reset") {
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!temPermissao(member))
+      return interaction.editReply("⛔ Sem permissão.");
+
+    db.run("DELETE FROM ranking", () =>
+      interaction.editReply("♻️ Ranking semanal resetado.")
     );
   }
 
   /* ===== SALVAR MÊS ===== */
   if (commandName === "salvar-mes") {
-    if (!temPermissao(member)) {
-      return interaction.reply({ content: "⛔ Sem permissão.", flags: 64 });
-    }
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!temPermissao(member))
+      return interaction.editReply("⛔ Sem permissão.");
 
     const mes = new Date().toLocaleString("pt-BR", {
       month: "long",
@@ -281,17 +274,15 @@ client.on("interactionCreate", async interaction => {
     });
 
     db.all("SELECT * FROM ranking_mensal", [], (_, rows) => {
-      rows.forEach(r => {
+      rows.forEach(r =>
         db.run(
           "INSERT INTO ranking_fechado VALUES (?, ?, ?, ?)",
           [mes, r.userId, r.username, r.money]
-        );
-      });
+        )
+      );
 
-      interaction.reply({
-        content: `📦 Ranking de **${mes}** salvo com sucesso.`,
-        flags: 64
-      });
+      db.run("DELETE FROM ranking_mensal");
+      interaction.editReply(`📦 Ranking de **${mes}** salvo e resetado.`);
     });
   }
 });
