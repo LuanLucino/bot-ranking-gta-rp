@@ -87,8 +87,8 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
-    .setName("forcar-anuncio")
-    .setDescription("Forçar anúncio do TOP 3"),
+    .setName("anunciar-top3")
+    .setDescription("Anunciar TOP 3 financeiro"),
 
   new SlashCommandBuilder()
     .setName("deletar-semanal")
@@ -130,79 +130,114 @@ client.on("interactionCreate", async interaction => {
     const embed = new EmbedBuilder()
       .setTitle("📘 Central de Ajuda — Ranking")
       .setColor(0x2f3136)
-      .setDescription(
-        `
+      .setDescription(`
 **Comandos de Membro**
-• /ranking — Ranking semanal  
-• /rankingmensal — Ranking mensal  
-• /adddinheiro — Adiciona dinheiro  
+• /ranking  
+• /rankingmensal  
+• /adddinheiro  
 
 **Comandos de Gerência / Líder**
-• /forcar-anuncio — Anunciar TOP 3  
-• /deletar-semanal — Zerar ranking semanal  
-• /deletar-mensal — Zerar ranking mensal  
-• /salvar-mes — Salvar e arquivar mês
-        `
-      )
+• /anunciar-top3  
+• /deletar-semanal  
+• /deletar-mensal  
+• /salvar-mes
+      `)
       .setTimestamp();
 
     return interaction.editReply({ embeds: [embed] });
   }
 
-  /* ===== RANKING SEMANAL ===== */
-  if (commandName === "ranking") {
+  /* ===== ADD DINHEIRO ===== */
+  if (commandName === "adddinheiro") {
     await interaction.deferReply();
 
-    db.all("SELECT * FROM ranking ORDER BY money DESC", [], (_, rows) => {
-      if (!rows.length)
-        return interaction.editReply("📭 Ranking semanal vazio.");
+    const valor = interaction.options.getInteger("valor");
+    const userOpt = interaction.options.getUser("usuario");
+
+    if (valor <= 0) {
+      return interaction.editReply("❌ Valor inválido.");
+    }
+
+    let targetUser = interaction.user;
+    let targetMember = member;
+
+    if (userOpt) {
+      if (!temPermissao(member)) {
+        return interaction.editReply("⛔ Você só pode adicionar dinheiro para si mesmo.");
+      }
+      targetUser = userOpt;
+      targetMember = await guild.members.fetch(userOpt.id);
+    }
+
+    const nome = nomeExibicao(targetMember, targetUser);
+
+    db.get("SELECT * FROM ranking WHERE userId = ?", [targetUser.id], (_, row) => {
+      if (row) {
+        db.run(
+          "UPDATE ranking SET money = money + ?, username = ? WHERE userId = ?",
+          [valor, nome, targetUser.id]
+        );
+      } else {
+        db.run(
+          "INSERT INTO ranking VALUES (?, ?, ?)",
+          [targetUser.id, nome, valor]
+        );
+      }
 
       const embed = new EmbedBuilder()
-        .setTitle("🏆 RANKING SEMANAL")
-        .setColor(0x2f3136)
+        .setTitle("💰 Dinheiro Adicionado")
+        .setColor(0x00ff99)
+        .setDescription(`**${nome}** recebeu ${formatarDinheiro(valor)}`)
         .setTimestamp();
-
-      rows.forEach((r, i) =>
-        embed.addFields({
-          name: `${i + 1}º ${r.username}`,
-          value: formatarDinheiro(r.money)
-        })
-      );
 
       interaction.editReply({ embeds: [embed] });
     });
   }
 
-  /* ===== RANKING MENSAL ===== */
-  if (commandName === "rankingmensal") {
-    await interaction.deferReply();
+  /* ===== ANUNCIAR TOP 3 ===== */
+  if (commandName === "anunciar-top3") {
+    await interaction.deferReply({ ephemeral: true });
 
-    db.all("SELECT * FROM ranking_mensal ORDER BY money DESC", [], (_, rows) => {
-      if (!rows.length)
-        return interaction.editReply("📭 Ranking mensal vazio.");
+    if (!temPermissao(member)) {
+      return interaction.editReply("⛔ Sem permissão.");
+    }
 
-      const embed = new EmbedBuilder()
-        .setTitle("🏆 RANKING MENSAL")
-        .setColor(0xffd700)
-        .setTimestamp();
+    const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
 
-      rows.forEach((r, i) =>
-        embed.addFields({
-          name: `${i + 1}º ${r.username}`,
-          value: formatarDinheiro(r.money)
-        })
-      );
+    db.all(
+      "SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3",
+      [],
+      (_, rows) => {
+        if (!rows.length) {
+          return interaction.editReply("📭 Sem dados para anunciar.");
+        }
 
-      interaction.editReply({ embeds: [embed] });
-    });
+        const medalhas = ["🥇", "🥈", "🥉"];
+        const embed = new EmbedBuilder()
+          .setTitle("🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI")
+          .setColor(0xffd700)
+          .setTimestamp();
+
+        rows.forEach((r, i) =>
+          embed.addFields({
+            name: `${medalhas[i]} ${r.username}`,
+            value: formatarDinheiro(r.money)
+          })
+        );
+
+        canal.send({ embeds: [embed] });
+        interaction.editReply("📢 TOP 3 anunciado com sucesso.");
+      }
+    );
   }
 
   /* ===== DELETAR SEMANAL ===== */
   if (commandName === "deletar-semanal") {
     await interaction.deferReply({ ephemeral: true });
 
-    if (!temPermissao(member))
+    if (!temPermissao(member)) {
       return interaction.editReply("⛔ Sem permissão.");
+    }
 
     db.run("DELETE FROM ranking", () =>
       interaction.editReply("♻️ Ranking semanal deletado.")
@@ -213,8 +248,9 @@ client.on("interactionCreate", async interaction => {
   if (commandName === "deletar-mensal") {
     await interaction.deferReply({ ephemeral: true });
 
-    if (!temPermissao(member))
+    if (!temPermissao(member)) {
       return interaction.editReply("⛔ Sem permissão.");
+    }
 
     db.run("DELETE FROM ranking_mensal", () =>
       interaction.editReply("♻️ Ranking mensal deletado.")
