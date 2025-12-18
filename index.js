@@ -206,19 +206,59 @@ client.on('interactionCreate', async interaction => {
 
   // ADDDINHEIRO (MEMBRO)
   if (commandName === 'adddinheiro') {
-    const valor = interaction.options.getInteger('valor');
-    const userId = interaction.user.id;
-    const nome = interaction.member.nickname ?? interaction.user.username;
+  const user = interaction.options.getUser('usuario');
+  const valor = interaction.options.getInteger('valor');
 
-    db.get('SELECT * FROM ranking WHERE userId = ?', [userId], (err, row) => {
-      const total = (row?.money || 0) + valor;
-      db.run(
-        'INSERT INTO ranking VALUES (?, ?, ?) ON CONFLICT(userId) DO UPDATE SET money = ?, username = ?',
-        [userId, nome, total, total, nome]
-      );
-      interaction.reply(`💰 ${formatarDinheiro(valor)} adicionado.`);
+  if (valor <= 0) {
+    return interaction.reply({
+      content: '❌ O valor precisa ser maior que zero.',
+      ephemeral: true
     });
   }
-});
+
+  const member = await interaction.guild.members.fetch(interaction.user.id);
+  const targetMember = await interaction.guild.members.fetch(user.id);
+
+  const cargosGerencia = ['GERENCIA_ROLE_ID', 'LIDER_ROLE_ID']; // ajuste aqui
+  const isGerencia = member.roles.cache.some(r => cargosGerencia.includes(r.id));
+
+  // 🔒 MEMBRO só pode adicionar para si mesmo
+  if (!isGerencia && interaction.user.id !== user.id) {
+    return interaction.reply({
+      content: '❌ Você só pode adicionar dinheiro para si mesmo.',
+      ephemeral: true
+    });
+  }
+
+  const nome = targetMember.nickname ?? user.username;
+
+  db.get(
+    'SELECT * FROM ranking WHERE userId = ?',
+    [user.id],
+    (err, row) => {
+      if (err) {
+        console.error(err);
+        return interaction.reply('❌ Erro ao acessar o banco.');
+      }
+
+      if (row) {
+        db.run(
+          'UPDATE ranking SET money = ?, username = ? WHERE userId = ?',
+          [row.money + valor, nome, user.id]
+        );
+      } else {
+        db.run(
+          'INSERT INTO ranking VALUES (?, ?, ?)',
+          [user.id, nome, valor]
+        );
+      }
+
+      interaction.reply(
+        `💰 **${formatarDinheiro(valor)}** adicionado para **${nome}**`
+      );
+    }
+  );
+}
+
 
 client.login(process.env.TOKEN);
