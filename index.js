@@ -10,6 +10,7 @@ const {
   PermissionFlagsBits
 } = require("discord.js");
 const sqlite3 = require("sqlite3").verbose();
+const cron = require("node-cron");
 
 /* ================= CONFIG ================= */
 
@@ -116,7 +117,59 @@ client.once("ready", async () => {
     Routes.applicationGuildCommands(client.user.id, GUILD_ID),
     { body: commands }
   );
+
   console.log(`✅ Bot online como ${client.user.tag}`);
+
+  /* =====================================================
+     ⏰ DOMINGO 19H — ANÚNCIO AUTOMÁTICO TOP 3 SEMANAL
+     ===================================================== */
+  cron.schedule(
+    "0 19 * * 0",
+    async () => {
+      try {
+        const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
+
+        db.all(
+          "SELECT * FROM ranking ORDER BY money DESC LIMIT 3",
+          [],
+          (_, rows) => {
+            if (!rows.length) return;
+
+            const medalhas = ["🥇", "🥈", "🥉"];
+            const embed = new EmbedBuilder()
+              .setTitle("🏆 TOP 3 SEMANAL — TŌRYŪ SHINKAI")
+              .setColor(0xffd700)
+              .setTimestamp();
+
+            rows.forEach((r, i) =>
+              embed.addFields({
+                name: `${medalhas[i]} ${r.username}`,
+                value: formatarDinheiro(r.money)
+              })
+            );
+
+            canal.send({ embeds: [embed] });
+            console.log("📢 TOP 3 semanal anunciado automaticamente.");
+          }
+        );
+      } catch (err) {
+        console.error("Erro no TOP 3 semanal automático:", err);
+      }
+    },
+    { timezone: "America/Sao_Paulo" }
+  );
+
+  /* =====================================================
+     🔄 SEGUNDA 00:00 — RESET AUTOMÁTICO SEMANAL
+     ===================================================== */
+  cron.schedule(
+    "0 0 * * 1",
+    () => {
+      db.run("DELETE FROM ranking");
+      console.log("🗑️ Ranking semanal resetado automaticamente.");
+    },
+    { timezone: "America/Sao_Paulo" }
+  );
 });
 
 /* ================= INTERACTIONS ================= */
