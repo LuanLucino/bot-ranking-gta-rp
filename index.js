@@ -74,7 +74,7 @@ const commands = [
       o.setName("valor").setDescription("Valor").setRequired(true)
     )
     .addUserOption(o =>
-      o.setName("usuario").setDescription("Usuário (gerência/líder)")
+      o.setName("usuario").setDescription("Usuário (opcional)")
     ),
 
   new SlashCommandBuilder()
@@ -107,6 +107,63 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName, member } = interaction;
+
+  /* ===== AJUDA ===== */
+  if (commandName === "ajuda") {
+    const embed = new EmbedBuilder()
+      .setTitle("📌 Comandos Disponíveis")
+      .setColor(0x2f3136)
+      .setDescription(`
+/ranking — Ranking semanal  
+/rankingmensal — Ranking mensal  
+/adddinheiro — Adicionar dinheiro  
+/anunciar-top3 — Anunciar TOP 3  
+/deletar-semanal — Reset semanal  
+/deletar-mensal — Reset mensal
+      `);
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  /* ===== ADD DINHEIRO ===== */
+  if (commandName === "adddinheiro") {
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!temPermissao(member))
+      return interaction.editReply("⛔ Sem permissão.");
+
+    const valor = interaction.options.getInteger("valor");
+    const usuario =
+      interaction.options.getUser("usuario") || interaction.user;
+
+    const nickname =
+      interaction.guild.members.cache.get(usuario.id)?.nickname ||
+      usuario.username;
+
+    db.run(
+      `
+      INSERT INTO ranking (userId, username, money)
+      VALUES (?, ?, ?)
+      ON CONFLICT(userId)
+      DO UPDATE SET money = money + ?
+      `,
+      [usuario.id, nickname, valor, valor]
+    );
+
+    db.run(
+      `
+      INSERT INTO ranking_mensal (userId, username, money)
+      VALUES (?, ?, ?)
+      ON CONFLICT(userId)
+      DO UPDATE SET money = money + ?
+      `,
+      [usuario.id, nickname, valor, valor]
+    );
+
+    interaction.editReply(
+      `💰 ${formatarDinheiro(valor)} adicionado para **${nickname}**`
+    );
+  }
 
   /* ===== RANKING SEMANAL ===== */
   if (commandName === "ranking") {
@@ -174,7 +231,7 @@ client.on("interactionCreate", async interaction => {
       [],
       (_, rows) => {
         if (!rows.length)
-          return interaction.editReply("📭 Sem dados para anunciar.");
+          return interaction.editReply("📭 Sem dados.");
 
         const medalhas = ["🥇", "🥈", "🥉"];
         const embed = new EmbedBuilder()
@@ -190,9 +247,27 @@ client.on("interactionCreate", async interaction => {
         );
 
         canal.send({ embeds: [embed] });
-        interaction.editReply("📢 TOP 3 anunciado com sucesso.");
+        interaction.editReply("📢 TOP 3 anunciado.");
       }
     );
+  }
+
+  /* ===== DELETAR SEMANAL ===== */
+  if (commandName === "deletar-semanal") {
+    if (!temPermissao(member))
+      return interaction.reply({ content: "⛔ Sem permissão.", ephemeral: true });
+
+    db.run("DELETE FROM ranking");
+    interaction.reply("🗑️ Ranking semanal resetado.");
+  }
+
+  /* ===== DELETAR MENSAL ===== */
+  if (commandName === "deletar-mensal") {
+    if (!temPermissao(member))
+      return interaction.reply({ content: "⛔ Sem permissão.", ephemeral: true });
+
+    db.run("DELETE FROM ranking_mensal");
+    interaction.reply("🗑️ Ranking mensal resetado.");
   }
 });
 
