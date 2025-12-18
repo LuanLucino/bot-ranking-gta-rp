@@ -6,7 +6,8 @@ const {
   SlashCommandBuilder,
   REST,
   Routes,
-  EmbedBuilder
+  EmbedBuilder,
+  PermissionFlagsBits
 } = require("discord.js");
 const sqlite3 = require("sqlite3").verbose();
 
@@ -63,8 +64,12 @@ const nomeNick = (guild, user) =>
 
 const commands = [
   new SlashCommandBuilder().setName("ajuda").setDescription("Lista de comandos"),
+
   new SlashCommandBuilder().setName("ranking").setDescription("Ranking semanal"),
-  new SlashCommandBuilder().setName("rankingmensal").setDescription("Ranking mensal"),
+
+  new SlashCommandBuilder()
+    .setName("rankingmensal")
+    .setDescription("Ranking mensal"),
 
   new SlashCommandBuilder()
     .setName("adddinheiro")
@@ -79,6 +84,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName("money")
     .setDescription("Ajustar dinheiro (Gerência/Líder)")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addUserOption(o =>
       o.setName("usuario").setDescription("Usuário").setRequired(true)
     )
@@ -88,15 +94,18 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("anunciar-top3")
-    .setDescription("Anunciar TOP 3 financeiro"),
+    .setDescription("Anunciar TOP 3 financeiro")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   new SlashCommandBuilder()
     .setName("deletar-semanal")
-    .setDescription("Deletar ranking semanal"),
+    .setDescription("Deletar ranking semanal")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   new SlashCommandBuilder()
     .setName("deletar-mensal")
     .setDescription("Deletar ranking mensal")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 ].map(c => c.toJSON());
 
 /* ================= READY ================= */
