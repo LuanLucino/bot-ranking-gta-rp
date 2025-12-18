@@ -124,34 +124,67 @@ cron.schedule('0 22 * * 0', anunciarTop3);
 
 // ---------- COMMANDS ----------
 const commands = [
-  new SlashCommandBuilder().setName('ajuda').setDescription('Lista de comandos'),
-  new SlashCommandBuilder().setName('ranking').setDescription('Ranking semanal'),
-  new SlashCommandBuilder().setName('rankingmensal').setDescription('Ranking mensal'),
+  new SlashCommandBuilder()
+    .setName('ajuda')
+    .setDescription('Lista de comandos disponíveis'),
+
+  new SlashCommandBuilder()
+    .setName('ranking')
+    .setDescription('Exibe o ranking semanal'),
+
+  new SlashCommandBuilder()
+    .setName('rankingmensal')
+    .setDescription('Exibe o ranking mensal'),
 
   new SlashCommandBuilder()
     .setName('adddinheiro')
-    .setDescription('Adicionar dinheiro')
+    .setDescription('Adicionar dinheiro ao ranking')
     .addIntegerOption(o =>
-      o.setName('valor').setDescription('Valor').setRequired(true)
+      o.setName('valor')
+        .setDescription('Valor a ser adicionado')
+        .setRequired(true)
     )
     .addUserOption(o =>
-      o.setName('usuario').setDescription('Usuário (gerência apenas)')
+      o.setName('usuario')
+        .setDescription('Usuário (somente gerência/líder)')
+        .setRequired(false)
     ),
 
-  new SlashCommandBuilder().setName('forcar-anuncio').setDescription('Força anúncio'),
-  new SlashCommandBuilder().setName('forcar-reset').setDescription('Força reset'),
+  new SlashCommandBuilder()
+    .setName('forcar-anuncio')
+    .setDescription('Força o anúncio do TOP 3'),
+
+  new SlashCommandBuilder()
+    .setName('forcar-reset')
+    .setDescription('Força o reset semanal'),
 
   new SlashCommandBuilder()
     .setName('removedinheiro')
-    .setDescription('Remove dinheiro')
-    .addUserOption(o => o.setName('usuario').setRequired(true))
-    .addIntegerOption(o => o.setName('valor').setRequired(true)),
+    .setDescription('Remove dinheiro de um usuário')
+    .addUserOption(o =>
+      o.setName('usuario')
+        .setDescription('Usuário afetado')
+        .setRequired(true)
+    )
+    .addIntegerOption(o =>
+      o.setName('valor')
+        .setDescription('Valor a ser removido')
+        .setRequired(true)
+    ),
 
   new SlashCommandBuilder()
     .setName('setdinheiro')
-    .setDescription('Define dinheiro')
-    .addUserOption(o => o.setName('usuario').setRequired(true))
-    .addIntegerOption(o => o.setName('valor').setRequired(true))
+    .setDescription('Define o valor exato de um usuário')
+    .addUserOption(o =>
+      o.setName('usuario')
+        .setDescription('Usuário afetado')
+        .setRequired(true)
+    )
+    .addIntegerOption(o =>
+      o.setName('valor')
+        .setDescription('Valor final')
+        .setRequired(true)
+    )
 ].map(c => c.toJSON());
 
 // ---------- READY ----------
@@ -169,7 +202,6 @@ client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
   const { commandName, member } = interaction;
 
-  // AJUDA
   if (commandName === 'ajuda') {
     const embed = new EmbedBuilder()
       .setTitle('📘 Painel de Comandos')
@@ -186,7 +218,6 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // RESTRIÇÃO
   const restritos = [
     'forcar-anuncio',
     'forcar-reset',
@@ -198,7 +229,6 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ content: '⛔ Sem permissão.', ephemeral: true });
   }
 
-  // ADDDINHEIRO
   if (commandName === 'adddinheiro') {
     await interaction.deferReply({ ephemeral: true });
 
@@ -207,24 +237,29 @@ client.on('interactionCreate', async interaction => {
     const alvo = usuario ?? interaction.user;
 
     if (!temPermissao(member) && usuario && usuario.id !== interaction.user.id) {
-      return interaction.editReply('❌ Você só pode adicionar para si mesmo.');
+      return interaction.editReply('❌ Você só pode adicionar dinheiro para si mesmo.');
     }
 
     db.get(
       'SELECT * FROM ranking WHERE userId = ?',
       [alvo.id],
       (_, row) => {
-        const nome = interaction.guild.members.cache.get(alvo.id)?.nickname ?? alvo.username;
+        const nome =
+          interaction.guild.members.cache.get(alvo.id)?.nickname ??
+          alvo.username;
+
         const novoValor = (row?.money ?? 0) + valor;
 
         if (row) {
-          db.run('UPDATE ranking SET money = ?, username = ? WHERE userId = ?', [
-            novoValor, nome, alvo.id
-          ]);
+          db.run(
+            'UPDATE ranking SET money = ?, username = ? WHERE userId = ?',
+            [novoValor, nome, alvo.id]
+          );
         } else {
-          db.run('INSERT INTO ranking VALUES (?, ?, ?)', [
-            alvo.id, nome, valor
-          ]);
+          db.run(
+            'INSERT INTO ranking VALUES (?, ?, ?)',
+            [alvo.id, nome, valor]
+          );
         }
 
         interaction.editReply(
@@ -234,9 +269,9 @@ client.on('interactionCreate', async interaction => {
     );
   }
 
-  // RANKING
   if (commandName === 'ranking' || commandName === 'rankingmensal') {
     await interaction.deferReply();
+
     const tabela = commandName === 'ranking' ? 'ranking' : 'ranking_mensal';
 
     db.all(
