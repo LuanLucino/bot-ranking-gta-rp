@@ -74,8 +74,8 @@ function resetSemanalAutomatico() {
           (err, row) => {
             if (row) {
               db.run(
-                'UPDATE ranking_mensal SET money = ? WHERE userId = ?',
-                [row.money + u.money, u.userId]
+                'UPDATE ranking_mensal SET money = ?, username = ? WHERE userId = ?',
+                [row.money + u.money, u.username, u.userId]
               );
             } else {
               db.run(
@@ -131,12 +131,8 @@ cron.schedule('0 22 * * 0', anunciarTop3);
 // ---------- COMMANDS ----------
 const commands = [
   new SlashCommandBuilder().setName('ajuda').setDescription('Lista de comandos'),
-
   new SlashCommandBuilder().setName('ranking').setDescription('Ranking semanal'),
-
-  new SlashCommandBuilder()
-    .setName('rankingmensal')
-    .setDescription('Ranking mensal'),
+  new SlashCommandBuilder().setName('rankingmensal').setDescription('Ranking mensal'),
 
   new SlashCommandBuilder()
     .setName('adddinheiro')
@@ -145,39 +141,23 @@ const commands = [
       o.setName('valor').setDescription('Valor').setRequired(true)
     )
     .addUserOption(o =>
-      o
-        .setName('usuario')
-        .setDescription('Usuário que receberá o dinheiro (gerência/líder)')
-        .setRequired(false)
+      o.setName('usuario').setDescription('Usuário (gerência/líder)').setRequired(false)
     ),
 
-  new SlashCommandBuilder()
-    .setName('forcar-anuncio')
-    .setDescription('Forçar anúncio do TOP 3'),
-
-  new SlashCommandBuilder()
-    .setName('forcar-reset')
-    .setDescription('Forçar reset semanal'),
+  new SlashCommandBuilder().setName('forcar-anuncio').setDescription('Forçar anúncio'),
+  new SlashCommandBuilder().setName('forcar-reset').setDescription('Forçar reset'),
 
   new SlashCommandBuilder()
     .setName('removedinheiro')
-    .setDescription('Remover dinheiro de um usuário')
-    .addUserOption(o =>
-      o.setName('usuario').setDescription('Usuário').setRequired(true)
-    )
-    .addIntegerOption(o =>
-      o.setName('valor').setDescription('Valor').setRequired(true)
-    ),
+    .setDescription('Remover dinheiro')
+    .addUserOption(o => o.setName('usuario').setDescription('Usuário').setRequired(true))
+    .addIntegerOption(o => o.setName('valor').setDescription('Valor').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('setdinheiro')
-    .setDescription('Definir dinheiro de um usuário')
-    .addUserOption(o =>
-      o.setName('usuario').setDescription('Usuário').setRequired(true)
-    )
-    .addIntegerOption(o =>
-      o.setName('valor').setDescription('Valor').setRequired(true)
-    )
+    .setDescription('Definir dinheiro')
+    .addUserOption(o => o.setName('usuario').setDescription('Usuário').setRequired(true))
+    .addIntegerOption(o => o.setName('valor').setDescription('Valor').setRequired(true))
 ].map(c => c.toJSON());
 
 // ---------- READY ----------
@@ -187,7 +167,6 @@ client.once('ready', async () => {
     Routes.applicationGuildCommands(client.user.id, GUILD_ID),
     { body: commands }
   );
-
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
@@ -200,36 +179,77 @@ client.on('interactionCreate', async interaction => {
   // AJUDA
   if (commandName === 'ajuda') {
     const embed = new EmbedBuilder()
-      .setTitle('📘 Comandos Disponíveis')
+      .setTitle('📘 Painel de Comandos')
       .setColor(0x2f3136)
       .setDescription(
         '**👤 Membros**\n' +
-          '/adddinheiro — Adicionar seu dinheiro\n' +
-          '/ranking — Ranking semanal\n' +
-          '/rankingmensal — Ranking mensal\n\n' +
-          '**🛡️ Gerência / Líder**\n' +
-          '/forcar-anuncio — Forçar anúncio\n' +
-          '/forcar-reset — Forçar reset\n' +
-          '/removedinheiro — Remover dinheiro\n' +
-          '/setdinheiro — Definir dinheiro'
+        '/adddinheiro\n/ranking\n/rankingmensal\n\n' +
+        '**🛡️ Gerência / Líder**\n' +
+        '/forcar-anuncio\n/forcar-reset\n/removedinheiro\n/setdinheiro'
       );
-
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
 
-  // COMANDOS RESTRITOS
-  const restritos = [
-    'forcar-anuncio',
-    'forcar-reset',
-    'removedinheiro',
-    'setdinheiro'
-  ];
-
+  // RESTRITOS
+  const restritos = ['forcar-anuncio','forcar-reset','removedinheiro','setdinheiro'];
   if (restritos.includes(commandName) && !temPermissao(member)) {
-    return interaction.reply({
-      content: '⛔ Você não tem permissão para usar este comando.',
-      flags: 64
+    return interaction.reply({ content: '⛔ Sem permissão.', flags: 64 });
+  }
+
+  // RANKING
+  if (commandName === 'ranking') {
+    db.all('SELECT * FROM ranking ORDER BY money DESC', [], (err, rows) => {
+      if (!rows?.length) {
+        return interaction.reply({ content: '📭 Ranking vazio.', flags: 64 });
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle('🏆 Ranking Semanal')
+        .setColor(0x00bfff);
+
+      rows.forEach((r, i) => {
+        embed.addFields({
+          name: `${i + 1}º ${r.username}`,
+          value: formatarDinheiro(r.money)
+        });
+      });
+
+      interaction.reply({ embeds: [embed] });
     });
+  }
+
+  // RANKING MENSAL
+  if (commandName === 'rankingmensal') {
+    db.all('SELECT * FROM ranking_mensal ORDER BY money DESC', [], (err, rows) => {
+      if (!rows?.length) {
+        return interaction.reply({ content: '📭 Ranking mensal vazio.', flags: 64 });
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle('🏆 Ranking Mensal')
+        .setColor(0xffa500);
+
+      rows.forEach((r, i) => {
+        embed.addFields({
+          name: `${i + 1}º ${r.username}`,
+          value: formatarDinheiro(r.money)
+        });
+      });
+
+      interaction.reply({ embeds: [embed] });
+    });
+  }
+
+  // FORÇAR ANÚNCIO
+  if (commandName === 'forcar-anuncio') {
+    await anunciarTop3();
+    return interaction.reply({ content: '📢 Anúncio enviado.', flags: 64 });
+  }
+
+  // FORÇAR RESET
+  if (commandName === 'forcar-reset') {
+    resetSemanalAutomatico();
+    return interaction.reply({ content: '♻️ Reset executado.', flags: 64 });
   }
 
   // ADDDINHEIRO
@@ -247,9 +267,7 @@ client.on('interactionCreate', async interaction => {
 
     if (usuarioOpcional) {
       if (!temPermissao(member)) {
-        return interaction.editReply(
-          '⛔ Você só pode adicionar dinheiro para si mesmo.'
-        );
+        return interaction.editReply('⛔ Você só pode adicionar para si mesmo.');
       }
       targetUser = usuarioOpcional;
     }
@@ -257,27 +275,23 @@ client.on('interactionCreate', async interaction => {
     const targetMember = await interaction.guild.members.fetch(targetUser.id);
     const nome = targetMember.nickname ?? targetUser.username;
 
-    db.get(
-      'SELECT * FROM ranking WHERE userId = ?',
-      [targetUser.id],
-      (err, row) => {
-        if (row) {
-          db.run(
-            'UPDATE ranking SET money = ? WHERE userId = ?',
-            [row.money + valor, targetUser.id]
-          );
-        } else {
-          db.run(
-            'INSERT INTO ranking VALUES (?, ?, ?)',
-            [targetUser.id, nome, valor]
-          );
-        }
-
-        interaction.editReply(
-          `💰 **${formatarDinheiro(valor)}** adicionado para **${nome}**`
+    db.get('SELECT * FROM ranking WHERE userId = ?', [targetUser.id], (err, row) => {
+      if (row) {
+        db.run(
+          'UPDATE ranking SET money = ?, username = ? WHERE userId = ?',
+          [row.money + valor, nome, targetUser.id]
+        );
+      } else {
+        db.run(
+          'INSERT INTO ranking VALUES (?, ?, ?)',
+          [targetUser.id, nome, valor]
         );
       }
-    );
+
+      interaction.editReply(
+        `💰 **${formatarDinheiro(valor)}** adicionado para **${nome}**`
+      );
+    });
   }
 });
 
