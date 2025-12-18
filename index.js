@@ -25,7 +25,34 @@ const client = new Client({
 });
 
 // ---------- DATABASE ----------
-const db = new sqlite3.Database('./ranking.db');
+const db = new sqlite3.Database('./ranking.db', err => {
+  if (err) {
+    console.error('Erro ao abrir o banco:', err);
+  } else {
+    console.log('📦 Banco de dados conectado.');
+  }
+});
+
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ranking (
+      userId TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      money INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ranking_mensal (
+      userId TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      money INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
+  console.log('🗄️ Tabelas verificadas/criadas com sucesso.');
+});
+
 
 // ---------- UTIL ----------
 function formatarDinheiro(valor) {
