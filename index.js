@@ -12,8 +12,8 @@ const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 
 // ================== CONFIG ==================
-const CANAL_ANUNCIO_ID = '1450842612557938769';
 const GUILD_ID = '1399382584101703723';
+const CANAL_ANUNCIO_ID = '1450842612557938769';
 
 const CARGO_GERENCIA_ID = '1399390797098520591';
 const CARGO_LIDER_ID = '1399389445546971206';
@@ -25,10 +25,7 @@ const client = new Client({
 });
 
 // ---------- DATABASE ----------
-const db = new sqlite3.Database('./ranking.db', err => {
-  if (err) console.error('Erro ao abrir banco:', err);
-  else console.log('📦 Banco de dados conectado.');
-});
+const db = new sqlite3.Database('./ranking.db');
 
 db.serialize(() => {
   db.run(`
@@ -64,8 +61,12 @@ function temPermissao(member) {
 
 // ---------- RESET SEMANAL ----------
 function resetSemanalAutomatico() {
-  db.all('SELECT * FROM ranking ORDER BY money DESC LIMIT 3', [], (err, top3) => {
-    if (top3?.length) {
+  db.all(
+    'SELECT * FROM ranking ORDER BY money DESC LIMIT 3',
+    [],
+    (err, top3) => {
+      if (!top3?.length) return;
+
       top3.forEach(u => {
         db.get(
           'SELECT * FROM ranking_mensal WHERE userId = ?',
@@ -73,8 +74,8 @@ function resetSemanalAutomatico() {
           (err, row) => {
             if (row) {
               db.run(
-                'UPDATE ranking_mensal SET money = ?, username = ? WHERE userId = ?',
-                [row.money + u.money, u.username, u.userId]
+                'UPDATE ranking_mensal SET money = ? WHERE userId = ?',
+                [row.money + u.money, u.userId]
               );
             } else {
               db.run(
@@ -85,10 +86,10 @@ function resetSemanalAutomatico() {
           }
         );
       });
+
+      db.run('DELETE FROM ranking');
     }
-    db.run('DELETE FROM ranking');
-    console.log('♻️ Reset semanal executado.');
-  });
+  );
 }
 
 // ---------- ANÚNCIO ----------
@@ -108,7 +109,7 @@ async function anunciarTop3() {
       const medalhas = ['🥇', '🥈', '🥉'];
       const embed = new EmbedBuilder()
         .setTitle('🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI')
-        .setColor(0xFFD700)
+        .setColor(0xffd700)
         .setTimestamp();
 
       rows.forEach((r, i) => {
@@ -123,29 +124,44 @@ async function anunciarTop3() {
   );
 }
 
-// ---------- CRONS ----------
-cron.schedule('0 3 * * 1', resetSemanalAutomatico); // Segunda 00h BR
-cron.schedule('0 22 * * 0', anunciarTop3);          // Domingo 19h BR
+// ---------- CRON ----------
+cron.schedule('0 3 * * 1', resetSemanalAutomatico);
+cron.schedule('0 22 * * 0', anunciarTop3);
 
 // ---------- COMMANDS ----------
 const commands = [
   new SlashCommandBuilder().setName('ajuda').setDescription('Lista de comandos'),
+
   new SlashCommandBuilder().setName('ranking').setDescription('Ranking semanal'),
-  new SlashCommandBuilder().setName('rankingmensal').setDescription('Ranking mensal'),
+
+  new SlashCommandBuilder()
+    .setName('rankingmensal')
+    .setDescription('Ranking mensal'),
 
   new SlashCommandBuilder()
     .setName('adddinheiro')
-    .setDescription('Adicionar dinheiro ao SEU ranking')
+    .setDescription('Adicionar dinheiro')
     .addIntegerOption(o =>
       o.setName('valor').setDescription('Valor').setRequired(true)
+    )
+    .addUserOption(o =>
+      o
+        .setName('usuario')
+        .setDescription('Usuário que receberá o dinheiro (gerência/líder)')
+        .setRequired(false)
     ),
 
-  new SlashCommandBuilder().setName('forcar-anuncio').setDescription('Força anúncio'),
-  new SlashCommandBuilder().setName('forcar-reset').setDescription('Força reset'),
+  new SlashCommandBuilder()
+    .setName('forcar-anuncio')
+    .setDescription('Forçar anúncio do TOP 3'),
+
+  new SlashCommandBuilder()
+    .setName('forcar-reset')
+    .setDescription('Forçar reset semanal'),
 
   new SlashCommandBuilder()
     .setName('removedinheiro')
-    .setDescription('Remove dinheiro de um usuário')
+    .setDescription('Remover dinheiro de um usuário')
     .addUserOption(o =>
       o.setName('usuario').setDescription('Usuário').setRequired(true)
     )
@@ -155,7 +171,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('setdinheiro')
-    .setDescription('Define dinheiro de um usuário')
+    .setDescription('Definir dinheiro de um usuário')
     .addUserOption(o =>
       o.setName('usuario').setDescription('Usuário').setRequired(true)
     )
@@ -167,38 +183,41 @@ const commands = [
 // ---------- READY ----------
 client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
-    body: commands
-  });
+  await rest.put(
+    Routes.applicationGuildCommands(client.user.id, GUILD_ID),
+    { body: commands }
+  );
+
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
 // ---------- INTERACTIONS ----------
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
+
   const { commandName, member } = interaction;
 
-  // ---------- AJUDA ----------
+  // AJUDA
   if (commandName === 'ajuda') {
     const embed = new EmbedBuilder()
-      .setTitle('📘 Painel de Comandos')
+      .setTitle('📘 Comandos Disponíveis')
       .setColor(0x2f3136)
       .setDescription(
         '**👤 Membros**\n' +
-        '/adddinheiro — Adicionar seu dinheiro\n' +
-        '/ranking — Ranking semanal\n' +
-        '/rankingmensal — Ranking mensal\n\n' +
-        '**🛡️ Gerência / Líder**\n' +
-        '/forcar-anuncio — Forçar anúncio\n' +
-        '/forcar-reset — Forçar reset\n' +
-        '/removedinheiro — Remover dinheiro\n' +
-        '/setdinheiro — Definir dinheiro'
+          '/adddinheiro — Adicionar seu dinheiro\n' +
+          '/ranking — Ranking semanal\n' +
+          '/rankingmensal — Ranking mensal\n\n' +
+          '**🛡️ Gerência / Líder**\n' +
+          '/forcar-anuncio — Forçar anúncio\n' +
+          '/forcar-reset — Forçar reset\n' +
+          '/removedinheiro — Remover dinheiro\n' +
+          '/setdinheiro — Definir dinheiro'
       );
 
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
 
-  // ---------- PERMISSÃO ----------
+  // COMANDOS RESTRITOS
   const restritos = [
     'forcar-anuncio',
     'forcar-reset',
@@ -213,30 +232,44 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // ---------- ADDDINHEIRO ----------
+  // ADDDINHEIRO
   if (commandName === 'adddinheiro') {
     await interaction.deferReply({ flags: 64 });
 
     const valor = interaction.options.getInteger('valor');
+    const usuarioOpcional = interaction.options.getUser('usuario');
+
     if (valor <= 0) {
       return interaction.editReply('❌ Valor inválido.');
     }
 
-    const nome = member.nickname ?? interaction.user.username;
+    let targetUser = interaction.user;
+
+    if (usuarioOpcional) {
+      if (!temPermissao(member)) {
+        return interaction.editReply(
+          '⛔ Você só pode adicionar dinheiro para si mesmo.'
+        );
+      }
+      targetUser = usuarioOpcional;
+    }
+
+    const targetMember = await interaction.guild.members.fetch(targetUser.id);
+    const nome = targetMember.nickname ?? targetUser.username;
 
     db.get(
       'SELECT * FROM ranking WHERE userId = ?',
-      [interaction.user.id],
+      [targetUser.id],
       (err, row) => {
         if (row) {
           db.run(
             'UPDATE ranking SET money = ? WHERE userId = ?',
-            [row.money + valor, interaction.user.id]
+            [row.money + valor, targetUser.id]
           );
         } else {
           db.run(
             'INSERT INTO ranking VALUES (?, ?, ?)',
-            [interaction.user.id, nome, valor]
+            [targetUser.id, nome, valor]
           );
         }
 
@@ -246,113 +279,7 @@ client.on('interactionCreate', async interaction => {
       }
     );
   }
-
-  // ---------- FORÇAR ANÚNCIO ----------
-  if (commandName === 'forcar-anuncio') {
-    await interaction.deferReply({ flags: 64 });
-    await anunciarTop3();
-    return interaction.editReply('📢 Anúncio enviado com sucesso.');
-  }
-
-  // ---------- FORÇAR RESET ----------
-  if (commandName === 'forcar-reset') {
-    await interaction.deferReply({ flags: 64 });
-    resetSemanalAutomatico();
-    return interaction.editReply('♻️ Reset semanal executado.');
-  }
-
-  // ---------- REMOVE DINHEIRO ----------
-  if (commandName === 'removedinheiro') {
-    await interaction.deferReply({ flags: 64 });
-
-    const user = interaction.options.getUser('usuario');
-    const valor = interaction.options.getInteger('valor');
-
-    db.get(
-      'SELECT * FROM ranking WHERE userId = ?',
-      [user.id],
-      (err, row) => {
-        if (!row) {
-          return interaction.editReply('❌ Usuário não encontrado.');
-        }
-
-        const novoValor = Math.max(0, row.money - valor);
-
-        db.run(
-          'UPDATE ranking SET money = ? WHERE userId = ?',
-          [novoValor, user.id]
-        );
-
-        interaction.editReply(
-          `➖ **${formatarDinheiro(valor)}** removido de **${row.username}**`
-        );
-      }
-    );
-  }
-
-  // ---------- SET DINHEIRO ----------
-  if (commandName === 'setdinheiro') {
-    await interaction.deferReply({ flags: 64 });
-
-    const user = interaction.options.getUser('usuario');
-    const valor = interaction.options.getInteger('valor');
-    const target = await interaction.guild.members.fetch(user.id);
-    const nome = target.nickname ?? user.username;
-
-    db.run(
-      `
-      INSERT INTO ranking (userId, username, money)
-      VALUES (?, ?, ?)
-      ON CONFLICT(userId)
-      DO UPDATE SET money = excluded.money, username = excluded.username
-      `,
-      [user.id, nome, valor]
-    );
-
-    interaction.editReply(
-      `✏️ Valor de **${nome}** definido para **${formatarDinheiro(valor)}**`
-    );
-  }
-
-  // ---------- RANKING ----------
-  if (commandName === 'ranking') {
-    await interaction.deferReply();
-
-    db.all('SELECT * FROM ranking ORDER BY money DESC', [], (err, rows) => {
-      if (!rows?.length) {
-        return interaction.editReply('📭 Ranking vazio.');
-      }
-
-      let msg = '🏆 **RANKING SEMANAL**\n\n';
-      rows.forEach((r, i) => {
-        msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
-      });
-
-      interaction.editReply(msg);
-    });
-  }
-
-  // ---------- RANKING MENSAL ----------
-  if (commandName === 'rankingmensal') {
-    await interaction.deferReply();
-
-    db.all(
-      'SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 10',
-      [],
-      (err, rows) => {
-        if (!rows?.length) {
-          return interaction.editReply('📭 Ranking mensal vazio.');
-        }
-
-        let msg = '🏆 **RANKING MENSAL**\n\n';
-        rows.forEach((r, i) => {
-          msg += `${i + 1}️⃣ ${r.username} — ${formatarDinheiro(r.money)}\n`;
-        });
-
-        interaction.editReply(msg);
-      }
-    );
-  }
 });
 
+// ---------- LOGIN ----------
 client.login(process.env.TOKEN);
