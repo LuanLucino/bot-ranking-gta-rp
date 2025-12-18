@@ -63,12 +63,8 @@ const nomeNick = (guild, user) =>
 
 const commands = [
   new SlashCommandBuilder().setName("ajuda").setDescription("Lista de comandos"),
-
   new SlashCommandBuilder().setName("ranking").setDescription("Ranking semanal"),
-
-  new SlashCommandBuilder()
-    .setName("rankingmensal")
-    .setDescription("Ranking mensal"),
+  new SlashCommandBuilder().setName("rankingmensal").setDescription("Ranking mensal"),
 
   new SlashCommandBuilder()
     .setName("adddinheiro")
@@ -129,7 +125,7 @@ client.on("interactionCreate", async interaction => {
       .setDescription(`
 /ranking — Ranking semanal  
 /rankingmensal — Ranking mensal  
-/adddinheiro — Adicionar dinheiro (uso geral)  
+/adddinheiro — Adicionar dinheiro  
 
 **Gerência / Líder**
 /money — Ajustar valores  
@@ -138,40 +134,38 @@ client.on("interactionCreate", async interaction => {
 /deletar-mensal — Reset mensal
       `);
 
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed] });
   }
 
-  /* ===== ADD DINHEIRO (GLOBAL) ===== */
+  /* ===== ADD DINHEIRO ===== */
   if (commandName === "adddinheiro") {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     const valor = interaction.options.getInteger("valor");
-    const usuarioSelecionado = interaction.options.getUser("usuario");
+    const userOpt = interaction.options.getUser("usuario");
 
-    if (usuarioSelecionado && !temPermissao(member))
+    if (userOpt && !temPermissao(member))
       return interaction.editReply("⛔ Você só pode adicionar para si mesmo.");
 
-    const usuarioFinal = usuarioSelecionado || interaction.user;
-    const nickname = nomeNick(guild, usuarioFinal);
+    const alvo = userOpt || interaction.user;
+    const nickname = nomeNick(guild, alvo);
 
     db.run(
       `
       INSERT INTO ranking (userId, username, money)
       VALUES (?, ?, ?)
-      ON CONFLICT(userId)
-      DO UPDATE SET money = money + ?
+      ON CONFLICT(userId) DO UPDATE SET money = money + ?
       `,
-      [usuarioFinal.id, nickname, valor, valor]
+      [alvo.id, nickname, valor, valor]
     );
 
     db.run(
       `
       INSERT INTO ranking_mensal (userId, username, money)
       VALUES (?, ?, ?)
-      ON CONFLICT(userId)
-      DO UPDATE SET money = money + ?
+      ON CONFLICT(userId) DO UPDATE SET money = money + ?
       `,
-      [usuarioFinal.id, nickname, valor, valor]
+      [alvo.id, nickname, valor, valor]
     );
 
     interaction.editReply(
@@ -179,9 +173,9 @@ client.on("interactionCreate", async interaction => {
     );
   }
 
-  /* ===== MONEY (ADMIN) ===== */
+  /* ===== MONEY ===== */
   if (commandName === "money") {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     if (!temPermissao(member))
       return interaction.editReply("⛔ Sem permissão.");
@@ -194,8 +188,7 @@ client.on("interactionCreate", async interaction => {
       `
       INSERT INTO ranking (userId, username, money)
       VALUES (?, ?, ?)
-      ON CONFLICT(userId)
-      DO UPDATE SET money = money + ?
+      ON CONFLICT(userId) DO UPDATE SET money = money + ?
       `,
       [usuario.id, nickname, valor, valor]
     );
@@ -204,8 +197,7 @@ client.on("interactionCreate", async interaction => {
       `
       INSERT INTO ranking_mensal (userId, username, money)
       VALUES (?, ?, ?)
-      ON CONFLICT(userId)
-      DO UPDATE SET money = money + ?
+      ON CONFLICT(userId) DO UPDATE SET money = money + ?
       `,
       [usuario.id, nickname, valor, valor]
     );
@@ -215,10 +207,103 @@ client.on("interactionCreate", async interaction => {
     );
   }
 
-  /* ===== RANKINGS / ANÚNCIOS / RESETS ===== */
+  /* ===== RANKING SEMANAL ===== */
+  if (commandName === "ranking") {
+    await interaction.deferReply();
 
-  // (ranking, rankingmensal, anunciar-top3, deletar-semanal, deletar-mensal)
-  // permanecem exatamente como estavam, apenas organizados acima
+    db.all("SELECT * FROM ranking ORDER BY money DESC", [], (_, rows) => {
+      if (!rows.length)
+        return interaction.editReply("📭 Ranking semanal vazio.");
+
+      const embed = new EmbedBuilder()
+        .setTitle("🏆 RANKING SEMANAL")
+        .setColor(0x2f3136);
+
+      rows.forEach((r, i) =>
+        embed.addFields({
+          name: `${i + 1}º ${r.username}`,
+          value: formatarDinheiro(r.money)
+        })
+      );
+
+      interaction.editReply({ embeds: [embed] });
+    });
+  }
+
+  /* ===== RANKING MENSAL ===== */
+  if (commandName === "rankingmensal") {
+    await interaction.deferReply();
+
+    db.all("SELECT * FROM ranking_mensal ORDER BY money DESC", [], (_, rows) => {
+      if (!rows.length)
+        return interaction.editReply("📭 Ranking mensal vazio.");
+
+      const embed = new EmbedBuilder()
+        .setTitle("🏆 RANKING MENSAL")
+        .setColor(0xffd700);
+
+      rows.forEach((r, i) =>
+        embed.addFields({
+          name: `${i + 1}º ${r.username}`,
+          value: formatarDinheiro(r.money)
+        })
+      );
+
+      interaction.editReply({ embeds: [embed] });
+    });
+  }
+
+  /* ===== ANUNCIAR TOP 3 ===== */
+  if (commandName === "anunciar-top3") {
+    await interaction.deferReply();
+
+    if (!temPermissao(member))
+      return interaction.editReply("⛔ Sem permissão.");
+
+    const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
+
+    db.all(
+      "SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3",
+      [],
+      (_, rows) => {
+        if (!rows.length)
+          return interaction.editReply("📭 Sem dados.");
+
+        const medalhas = ["🥇", "🥈", "🥉"];
+        const embed = new EmbedBuilder()
+          .setTitle("🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI")
+          .setColor(0xffd700);
+
+        rows.forEach((r, i) =>
+          embed.addFields({
+            name: `${medalhas[i]} ${r.username}`,
+            value: formatarDinheiro(r.money)
+          })
+        );
+
+        canal.send({ embeds: [embed] });
+        interaction.editReply("📢 TOP 3 anunciado.");
+      }
+    );
+  }
+
+  /* ===== DELETAR SEMANAL ===== */
+  if (commandName === "deletar-semanal") {
+    if (!temPermissao(member))
+      return interaction.reply("⛔ Sem permissão.");
+
+    db.run("DELETE FROM ranking");
+    interaction.reply("🗑️ Ranking semanal resetado.");
+  }
+
+  /* ===== DELETAR MENSAL ===== */
+  if (commandName === "deletar-mensal") {
+    if (!temPermissao(member))
+      return interaction.reply("⛔ Sem permissão.");
+
+    db.run("DELETE FROM ranking_mensal");
+    interaction.reply("🗑️ Ranking mensal resetado.");
+  }
 });
 
 /* ================= LOGIN ================= */
