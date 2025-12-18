@@ -14,7 +14,7 @@ const cron = require('node-cron');
 
 // ================== CONFIG ==================
 const CANAL_ANUNCIO_ID = '1450842612557938769';
-const CARGO_GERENCIA_ID = 'COLOQUE_AQUI_O_ID_DO_CARGO';
+const CARGO_GERENCIA_ID = '1399390797098520591';
 // ============================================
 
 // ---------- CLIENT ----------
