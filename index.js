@@ -70,7 +70,7 @@ function temPermissao(member) {
   );
 }
 
-function getNome(member, user) {
+function nomeExibicao(member, user) {
   return member?.nickname ?? user.username;
 }
 
@@ -96,16 +96,16 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName("forcar-anuncio")
+    .setDescription("Forçar anúncio do TOP 3"),
+
+  new SlashCommandBuilder()
     .setName("forcar-reset")
     .setDescription("Forçar reset semanal"),
 
   new SlashCommandBuilder()
     .setName("salvar-mes")
-    .setDescription("Salvar ranking mensal atual"),
-
-  new SlashCommandBuilder()
-    .setName("forcar-anuncio")
-    .setDescription("Forçar anúncio do TOP 3")
+    .setDescription("Salvar ranking mensal atual")
 ].map(c => c.toJSON());
 
 /* ================= READY ================= */
@@ -126,7 +126,101 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  const { commandName, member } = interaction;
+  const { commandName, member, guild } = interaction;
+
+  /* ===== RANKING SEMANAL ===== */
+  if (commandName === "ranking") {
+    const rows = await new Promise(res =>
+      db.all("SELECT * FROM ranking ORDER BY money DESC", [], (_, r) => res(r))
+    );
+
+    if (!rows.length) {
+      return interaction.reply("📭 Ranking semanal vazio.");
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle("🏆 RANKING SEMANAL")
+      .setColor(0x2f3136)
+      .setTimestamp();
+
+    rows.forEach((r, i) => {
+      embed.addFields({
+        name: `${i + 1}º ${r.username}`,
+        value: formatarDinheiro(r.money),
+        inline: false
+      });
+    });
+
+    return interaction.reply({ embeds: [embed] });
+  }
+
+  /* ===== RANKING MENSAL ===== */
+  if (commandName === "rankingmensal") {
+    const rows = await new Promise(res =>
+      db.all(
+        "SELECT * FROM ranking_mensal ORDER BY money DESC",
+        [],
+        (_, r) => res(r)
+      )
+    );
+
+    if (!rows.length) {
+      return interaction.reply("📭 Ranking mensal vazio.");
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle("🏆 RANKING MENSAL")
+      .setColor(0xFFD700)
+      .setTimestamp();
+
+    rows.forEach((r, i) => {
+      embed.addFields({
+        name: `${i + 1}º ${r.username}`,
+        value: formatarDinheiro(r.money),
+        inline: false
+      });
+    });
+
+    return interaction.reply({ embeds: [embed] });
+  }
+
+  /* ===== FORÇAR ANÚNCIO ===== */
+  if (commandName === "forcar-anuncio") {
+    if (!temPermissao(member)) {
+      return interaction.reply({ content: "⛔ Sem permissão.", flags: 64 });
+    }
+
+    const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
+
+    const rows = await new Promise(res =>
+      db.all(
+        "SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3",
+        [],
+        (_, r) => res(r)
+      )
+    );
+
+    if (!rows.length) {
+      return interaction.reply("📭 Sem dados para anunciar.");
+    }
+
+    const medalhas = ["🥇", "🥈", "🥉"];
+    const embed = new EmbedBuilder()
+      .setTitle("🏆 TOP 3 FINANCEIRO — TŌRYŪ SHINKAI")
+      .setColor(0xFFD700)
+      .setTimestamp();
+
+    rows.forEach((r, i) => {
+      embed.addFields({
+        name: `${medalhas[i]} ${r.username}`,
+        value: formatarDinheiro(r.money),
+        inline: false
+      });
+    });
+
+    await canal.send({ embeds: [embed] });
+    return interaction.reply({ content: "📢 Anúncio enviado.", flags: 64 });
+  }
 
   /* ===== ADD DINHEIRO ===== */
   if (commandName === "adddinheiro") {
@@ -143,15 +237,15 @@ client.on("interactionCreate", async interaction => {
         return interaction.editReply("⛔ Você só pode adicionar para si mesmo.");
       }
       targetUser = userOpt;
-      targetMember = await interaction.guild.members.fetch(userOpt.id);
+      targetMember = await guild.members.fetch(userOpt.id);
     }
 
-    const nome = getNome(targetMember, targetUser);
+    const nome = nomeExibicao(targetMember, targetUser);
 
     db.get(
       "SELECT * FROM ranking WHERE userId = ?",
       [targetUser.id],
-      (err, row) => {
+      (_, row) => {
         if (row) {
           db.run(
             "UPDATE ranking SET money = money + ?, username = ? WHERE userId = ?",
@@ -165,52 +259,12 @@ client.on("interactionCreate", async interaction => {
         }
 
         const embed = new EmbedBuilder()
-          .setColor(0x00ff99)
           .setTitle("💰 Dinheiro Adicionado")
+          .setColor(0x00ff99)
           .setDescription(`**${nome}** recebeu ${formatarDinheiro(valor)}`)
           .setTimestamp();
 
         interaction.editReply({ embeds: [embed] });
-      }
-    );
-  }
-
-  /* ===== RESET SEMANAL ===== */
-  if (commandName === "forcar-reset") {
-    if (!temPermissao(member)) {
-      return interaction.reply({ content: "⛔ Sem permissão.", flags: 64 });
-    }
-
-    db.all(
-      "SELECT * FROM ranking ORDER BY money DESC LIMIT 3",
-      [],
-      (err, rows) => {
-        rows.forEach(r => {
-          db.get(
-            "SELECT * FROM ranking_mensal WHERE userId = ?",
-            [r.userId],
-            (err, row) => {
-              if (row) {
-                db.run(
-                  "UPDATE ranking_mensal SET money = money + ?, username = ? WHERE userId = ?",
-                  [r.money, r.username, r.userId]
-                );
-              } else {
-                db.run(
-                  "INSERT INTO ranking_mensal VALUES (?, ?, ?)",
-                  [r.userId, r.username, r.money]
-                );
-              }
-            }
-          );
-        });
-
-        db.run("DELETE FROM ranking");
-
-        interaction.reply({
-          content: "✅ Reset semanal realizado com sucesso.",
-          flags: 64
-        });
       }
     );
   }
@@ -226,7 +280,7 @@ client.on("interactionCreate", async interaction => {
       year: "numeric"
     });
 
-    db.all("SELECT * FROM ranking_mensal", [], (err, rows) => {
+    db.all("SELECT * FROM ranking_mensal", [], (_, rows) => {
       rows.forEach(r => {
         db.run(
           "INSERT INTO ranking_fechado VALUES (?, ?, ?, ?)",
