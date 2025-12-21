@@ -298,4 +298,135 @@ client.on("interactionCreate", async interaction => {
 
 /* ================= LOGIN ================= */
 
+/* ===========================================================
+   🔁 AUTOMAÇÕES (CRON JOBS)
+   Este bloco adiciona TODAS as automações automáticas
+   Semanal e Mensal, sem interferir nos comandos existentes
+   =========================================================== */
+
+const cron = require("node-cron");
+
+/* ===========================================================
+   📅 SEMANAL
+   =========================================================== */
+
+/**
+ * 🔔 DOMINGO — 20:00 (Horário de Brasília)
+ * Anúncio automático do TOP 3 do ranking SEMANAL
+ */
+cron.schedule(
+  "0 20 * * 0",
+  async () => {
+    const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
+
+    db.all(
+      "SELECT * FROM ranking ORDER BY money DESC LIMIT 3",
+      [],
+      (_, rows) => {
+        if (!rows || rows.length === 0) return;
+
+        const medalhas = ["🥇", "🥈", "🥉"];
+        const embed = new EmbedBuilder()
+          .setTitle("🏆 TOP 3 SEMANAL — TŌRYŪ SHINKAI")
+          .setColor(0x3498db)
+          .setTimestamp();
+
+        rows.forEach((r, i) => {
+          embed.addFields({
+            name: `${medalhas[i]} ${r.username}`,
+            value: formatarDinheiro(r.money),
+            inline: false
+          });
+        });
+
+        canal.send({ embeds: [embed] });
+      }
+    );
+  },
+  { timezone: "America/Sao_Paulo" }
+);
+
+/**
+ * 🔄 SEGUNDA — 00:00
+ * Reset automático do ranking semanal
+ * (o ranking mensal continua acumulando)
+ */
+cron.schedule(
+  "0 0 * * 1",
+  () => {
+    db.run("DELETE FROM ranking");
+    console.log("🔄 Ranking semanal resetado automaticamente.");
+  },
+  { timezone: "America/Sao_Paulo" }
+);
+
+/* ===========================================================
+   📆 MENSAL (ÚLTIMO DIA DO MÊS — AUTOMÁTICO)
+   Funciona para meses com 28, 29, 30 ou 31 dias
+   =========================================================== */
+
+/**
+ * 👑 ÚLTIMO DIA DO MÊS — 20:00
+ * Anúncio automático do TOP 3 MENSAL
+ */
+cron.schedule(
+  "0 20 28-31 * *",
+  async () => {
+    const hoje = new Date();
+    const amanha = new Date(hoje);
+    amanha.setDate(hoje.getDate() + 1);
+
+    // Se amanhã for outro mês, hoje é o último dia do mês
+    if (amanha.getMonth() !== hoje.getMonth()) {
+      const canal = await client.channels.fetch(CANAL_ANUNCIO_ID);
+
+      db.all(
+        "SELECT * FROM ranking_mensal ORDER BY money DESC LIMIT 3",
+        [],
+        (_, rows) => {
+          if (!rows || rows.length === 0) return;
+
+          const medalhas = ["🥇", "🥈", "🥉"];
+          const embed = new EmbedBuilder()
+            .setTitle("👑 TOP 3 MENSAL — TŌRYŪ SHINKAI")
+            .setColor(0xf1c40f)
+            .setTimestamp();
+
+          rows.forEach((r, i) => {
+            embed.addFields({
+              name: `${medalhas[i]} ${r.username}`,
+              value: formatarDinheiro(r.money),
+              inline: false
+            });
+          });
+
+          canal.send({ embeds: [embed] });
+        }
+      );
+    }
+  },
+  { timezone: "America/Sao_Paulo" }
+);
+
+/**
+ * ♻️ ÚLTIMO DIA DO MÊS — 23:50
+ * Reset automático do ranking mensal
+ */
+cron.schedule(
+  "50 23 28-31 * *",
+  () => {
+    const hoje = new Date();
+    const amanha = new Date(hoje);
+    amanha.setDate(hoje.getDate() + 1);
+
+    // Confirma que é o último dia do mês
+    if (amanha.getMonth() !== hoje.getMonth()) {
+      db.run("DELETE FROM ranking_mensal");
+      console.log("♻️ Ranking mensal resetado automaticamente.");
+    }
+  },
+  { timezone: "America/Sao_Paulo" }
+);
+
+
 client.login(process.env.TOKEN);
