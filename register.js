@@ -19,7 +19,7 @@ const CARGO_GERENCIA_ID = "1399390797098520591";
 const CARGO_LIDER_ID = "1399389445546971206";
 /* ================== */
 
-const db = new sqlite3.Database("./ranking.db");
+const db = new sqlite3.Database("./data/ranking.db");
 
 db.serialize(() => {
   db.run(`
