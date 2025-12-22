@@ -5,8 +5,7 @@ const {
   TextInputStyle,
   ActionRowBuilder,
   EmbedBuilder,
-  StringSelectMenuBuilder,
-  PermissionFlagsBits
+  StringSelectMenuBuilder
 } = require("discord.js");
 
 const sqlite3 = require("sqlite3").verbose();
@@ -40,213 +39,170 @@ db.serialize(() => {
 });
 
 module.exports = client => {
-
-  /* ================= /cadastro ================= */
   client.on("interactionCreate", async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== "cadastro") return;
 
-    if (interaction.channelId !== CANAL_CADASTRO_ID) {
-      return interaction.reply({
-        content: "⛔ Use este comando apenas no canal de cadastro.",
-        ephemeral: true
-      });
-    }
-
-    // Bloquear múltiplos cadastros
-    db.get(
-      "SELECT userId FROM cadastro WHERE userId = ?",
-      [interaction.user.id],
-      async (_, row) => {
-        if (row) {
-          return interaction.reply({
-            content: "⚠️ Você já possui um cadastro.",
-            ephemeral: true
-          });
-        }
-
-        // SELECT DE FAMÍLIA
-        const select = new StringSelectMenuBuilder()
-          .setCustomId("select_familia")
-          .setPlaceholder("Selecione sua família")
-          .addOptions([
-            {
-              label: "Tōryū Shinkai",
-              value: "Toryu Shinkai",
-              emoji: "🐉"
-            },
-            {
-              label: "Restaurante",
-              value: "Restaurante",
-              emoji: "🍜"
-            }
-          ]);
-
-        const rowSelect = new ActionRowBuilder().addComponents(select);
-
-        await interaction.reply({
-          content: "🏢 **Escolha sua família para continuar o cadastro:**",
-          components: [rowSelect],
+    /* ================= /cadastro ================= */
+    if (interaction.isChatInputCommand() && interaction.commandName === "cadastro") {
+      if (interaction.channelId !== CANAL_CADASTRO_ID) {
+        return interaction.reply({
+          content: "⛔ Use este comando apenas no canal de cadastro.",
           ephemeral: true
         });
       }
-    );
-  });
 
- /* ================= SELECT FAMÍLIA ================= */
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isStringSelectMenu()) return;
-  if (interaction.customId !== "select_familia") return;
+      db.get(
+        "SELECT userId FROM cadastro WHERE userId = ?",
+        [interaction.user.id],
+        async (_, row) => {
+          if (row) {
+            return interaction.reply({
+              content: "⚠️ Você já possui um cadastro.",
+              ephemeral: true
+            });
+          }
 
-  const familia = interaction.values[0];
+          const select = new StringSelectMenuBuilder()
+            .setCustomId("select_familia")
+            .setPlaceholder("Selecione sua família")
+            .addOptions(
+              { label: "Tōryū Shinkai", value: "Toryu Shinkai", emoji: "🐉" },
+              { label: "Restaurante", value: "Restaurante", emoji: "🍜" }
+            );
 
-  const modal = new ModalBuilder()
-    .setCustomId(`modal_cadastro_${familia}`)
-    .setTitle("📋 Cadastro de Personagem");
-
-  const idPersonagem = new TextInputBuilder()
-    .setCustomId("personagemId")
-    .setLabel("ID do personagem")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
-  const nome = new TextInputBuilder()
-    .setCustomId("nome")
-    .setLabel("Nome do personagem")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
-  const vulgo = new TextInputBuilder()
-    .setCustomId("vulgo")
-    .setLabel("Vulgo / Apelido")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
-  const telefone = new TextInputBuilder()
-    .setCustomId("telefone")
-    .setLabel("Telefone GTA (123-456)")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(idPersonagem),
-    new ActionRowBuilder().addComponents(nome),
-    new ActionRowBuilder().addComponents(vulgo),
-    new ActionRowBuilder().addComponents(telefone)
-  );
-
-  // ✅ IMPORTANTE: remover o select da mensagem antes
-  await interaction.message.edit({ components: [] });
-
-  // ✅ responder a interação abrindo o modal
-  await interaction.showModal(modal);
-});
-
-
-
-  /* ================= SUBMIT MODAL ================= */
-  client.on("interactionCreate", async interaction => {
-    if (!interaction.isModalSubmit()) return;
-    if (!interaction.customId.startsWith("modal_cadastro_")) return;
-
-    const familia = interaction.customId.replace("modal_cadastro_", "");
-
-    let telefone = interaction.fields.getTextInputValue("telefone").replace(/\D/g, "");
-    telefone = `(666) ${telefone.slice(0, 3)}-${telefone.slice(3, 6)}`;
-
-    const personagemId = interaction.fields.getTextInputValue("personagemId");
-    const nome = interaction.fields.getTextInputValue("nome");
-    const vulgo = interaction.fields.getTextInputValue("vulgo");
-
-    const nicknameFinal = `#${personagemId} ${nome}`;
-
-    // SALVAR
-    db.run(
-      `
-      INSERT INTO cadastro
-      (userId, personagemId, nome, vulgo, telefone, familia)
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [
-        interaction.user.id,
-        personagemId,
-        nome,
-        vulgo,
-        telefone,
-        familia
-      ]
-    );
-
-    // ALTERAR NICK
-    try {
-      await interaction.member.setNickname(nicknameFinal);
-    } catch {}
-
-    // CARGOS
-    if (familia === "Toryu Shinkai") {
-      await interaction.member.roles.add(CARGO_TORYU_ID);
+          await interaction.reply({
+            content: "🏢 **Escolha sua família para continuar o cadastro:**",
+            components: [new ActionRowBuilder().addComponents(select)],
+            ephemeral: true
+          });
+        }
+      );
+      return;
     }
 
-    if (familia === "Restaurante") {
-      await interaction.member.roles.add(CARGO_RESTAURANTE_ID);
+    /* ================= SELECT FAMÍLIA ================= */
+    if (interaction.isStringSelectMenu() && interaction.customId === "select_familia") {
+      const familia = interaction.values[0];
+
+      const modal = new ModalBuilder()
+        .setCustomId(`modal_cadastro_${familia}`)
+        .setTitle("📋 Cadastro de Personagem");
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("personagemId")
+            .setLabel("ID do personagem")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("nome")
+            .setLabel("Nome do personagem")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("vulgo")
+            .setLabel("Vulgo / Apelido")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("telefone")
+            .setLabel("Telefone GTA (123-456)")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+        )
+      );
+
+      await interaction.showModal(modal);
+      return;
     }
 
-    // EMBED PÚBLICO
-    const embed = new EmbedBuilder()
-      .setTitle("✅ Novo Cadastro Realizado")
-      .setColor(0x2ecc71)
-      .addFields(
-        { name: "👤 Personagem", value: nome, inline: true },
-        { name: "🆔 ID", value: personagemId, inline: true },
-        { name: "🗣️ Vulgo", value: vulgo, inline: true },
-        { name: "📞 Telefone", value: telefone, inline: true },
-        { name: "🏢 Família", value: familia, inline: true }
-      )
-      .setTimestamp();
+    /* ================= SUBMIT MODAL ================= */
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("modal_cadastro_")) {
+      const familia = interaction.customId.replace("modal_cadastro_", "");
 
-    await interaction.reply({ embeds: [embed] });
-  });
+      let telefone = interaction.fields.getTextInputValue("telefone").replace(/\D/g, "");
+      telefone = `(666) ${telefone.slice(0, 3)}-${telefone.slice(3, 6)}`;
 
-  /* ================= /removercadastro ================= */
-  client.on("interactionCreate", async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== "removercadastro") return;
+      const personagemId = interaction.fields.getTextInputValue("personagemId");
+      const nome = interaction.fields.getTextInputValue("nome");
+      const vulgo = interaction.fields.getTextInputValue("vulgo");
 
-    if (
-      !interaction.member.roles.cache.has(CARGO_GERENCIA_ID) &&
-      !interaction.member.roles.cache.has(CARGO_LIDER_ID)
-    ) {
-      return interaction.reply({ content: "⛔ Sem permissão.", ephemeral: true });
-    }
+      db.run(
+        `
+        INSERT INTO cadastro (userId, personagemId, nome, vulgo, telefone, familia)
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [interaction.user.id, personagemId, nome, vulgo, telefone, familia]
+      );
 
-    const user = interaction.options.getUser("usuario");
+      try {
+        await interaction.member.setNickname(`#${personagemId} ${nome}`);
+      } catch {}
 
-    db.run("DELETE FROM cadastro WHERE userId = ?", [user.id]);
-
-    await interaction.reply(`🗑️ Cadastro de **${user.username}** removido.`);
-  });
-
-  /* ================= /membros ================= */
-  client.on("interactionCreate", async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== "membros") return;
-
-    db.all("SELECT * FROM cadastro", [], (_, rows) => {
-      if (!rows.length)
-        return interaction.reply("📭 Nenhum membro cadastrado.");
+      if (familia === "Toryu Shinkai") {
+        await interaction.member.roles.add(CARGO_TORYU_ID);
+      }
+      if (familia === "Restaurante") {
+        await interaction.member.roles.add(CARGO_RESTAURANTE_ID);
+      }
 
       const embed = new EmbedBuilder()
-        .setTitle("📋 Membros Cadastrados")
-        .setColor(0x3498db);
+        .setTitle("✅ Novo Cadastro Realizado")
+        .setColor(0x2ecc71)
+        .addFields(
+          { name: "👤 Personagem", value: nome, inline: true },
+          { name: "🆔 ID", value: personagemId, inline: true },
+          { name: "🗣️ Vulgo", value: vulgo, inline: true },
+          { name: "📞 Telefone", value: telefone, inline: true },
+          { name: "🏢 Família", value: familia, inline: true }
+        )
+        .setTimestamp();
 
-      rows.forEach(r => {
-        embed.addFields({
-          name: `#${r.personagemId} ${r.nome}`,
-          value: `🗣️ ${r.vulgo}\n📞 ${r.telefone}\n🏢 ${r.familia}`
+      await interaction.reply({ embeds: [embed] });
+      return;
+    }
+
+    /* ================= /removercadastro ================= */
+    if (interaction.isChatInputCommand() && interaction.commandName === "removercadastro") {
+      if (
+        !interaction.member.roles.cache.has(CARGO_GERENCIA_ID) &&
+        !interaction.member.roles.cache.has(CARGO_LIDER_ID)
+      ) {
+        return interaction.reply({ content: "⛔ Sem permissão.", ephemeral: true });
+      }
+
+      const user = interaction.options.getUser("usuario");
+      db.run("DELETE FROM cadastro WHERE userId = ?", [user.id]);
+
+      return interaction.reply(`🗑️ Cadastro de **${user.username}** removido.`);
+    }
+
+    /* ================= /membros ================= */
+    if (interaction.isChatInputCommand() && interaction.commandName === "membros") {
+      db.all("SELECT * FROM cadastro", [], (_, rows) => {
+        if (!rows.length) {
+          return interaction.reply("📭 Nenhum membro cadastrado.");
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle("📋 Membros Cadastrados")
+          .setColor(0x3498db);
+
+        rows.forEach(r => {
+          embed.addFields({
+            name: `#${r.personagemId} ${r.nome}`,
+            value: `🗣️ ${r.vulgo}\n📞 ${r.telefone}\n🏢 ${r.familia}`
+          });
         });
-      });
 
-      interaction.reply({ embeds: [embed] });
-    });
+        interaction.reply({ embeds: [embed] });
+      });
+    }
   });
 };
