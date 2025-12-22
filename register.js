@@ -136,7 +136,9 @@ module.exports = client => {
       new ActionRowBuilder().addComponents(telefone)
     );
 
+    await interaction.deferUpdate();
     await interaction.showModal(modal);
+
   });
 
   /* ================= SUBMIT MODAL ================= */
