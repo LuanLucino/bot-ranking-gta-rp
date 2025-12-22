@@ -93,53 +93,53 @@ module.exports = client => {
     );
   });
 
-  /* ================= SELECT FAMÍLIA ================= */
-  client.on("interactionCreate", async interaction => {
-    if (!interaction.isStringSelectMenu()) return;
-    if (interaction.customId !== "select_familia") return;
+ /* ================= SELECT FAMÍLIA ================= */
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.customId !== "select_familia") return;
 
-    const familia = interaction.values[0];
+  const familia = interaction.values[0];
 
-    // MODAL
-    const modal = new ModalBuilder()
-      .setCustomId(`modal_cadastro_${familia}`)
-      .setTitle("📋 Cadastro de Personagem");
+  const modal = new ModalBuilder()
+    .setCustomId(`modal_cadastro_${familia}`)
+    .setTitle("📋 Cadastro de Personagem");
 
-    const idPersonagem = new TextInputBuilder()
-      .setCustomId("personagemId")
-      .setLabel("ID do personagem")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+  const idPersonagem = new TextInputBuilder()
+    .setCustomId("personagemId")
+    .setLabel("ID do personagem")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
 
-    const nome = new TextInputBuilder()
-      .setCustomId("nome")
-      .setLabel("Nome do personagem")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+  const nome = new TextInputBuilder()
+    .setCustomId("nome")
+    .setLabel("Nome do personagem")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
 
-    const vulgo = new TextInputBuilder()
-      .setCustomId("vulgo")
-      .setLabel("Vulgo / Apelido")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+  const vulgo = new TextInputBuilder()
+    .setCustomId("vulgo")
+    .setLabel("Vulgo / Apelido")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
 
-    const telefone = new TextInputBuilder()
-      .setCustomId("telefone")
-      .setLabel("Telefone GTA (123-456)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+  const telefone = new TextInputBuilder()
+    .setCustomId("telefone")
+    .setLabel("Telefone GTA (123-456)")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(idPersonagem),
-      new ActionRowBuilder().addComponents(nome),
-      new ActionRowBuilder().addComponents(vulgo),
-      new ActionRowBuilder().addComponents(telefone)
-    );
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(idPersonagem),
+    new ActionRowBuilder().addComponents(nome),
+    new ActionRowBuilder().addComponents(vulgo),
+    new ActionRowBuilder().addComponents(telefone)
+  );
 
-    await interaction.deferUpdate();
-    await interaction.showModal(modal);
+  // 🔴 ESSENCIAL PARA NÃO DAR ERRO
+  await interaction.deferUpdate();
+  await interaction.showModal(modal);
+});
 
-  });
 
   /* ================= SUBMIT MODAL ================= */
   client.on("interactionCreate", async interaction => {
