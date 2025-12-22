@@ -38,6 +38,24 @@ db.serialize(() => {
   `);
 });
 
+// 🔧 MIGRAÇÃO: garantir coluna "familia"
+db.serialize(() => {
+  db.all("PRAGMA table_info(cadastro);", (err, columns) => {
+    if (err) return;
+
+    const existeFamilia = columns.some(col => col.name === "familia");
+
+    if (!existeFamilia) {
+      db.run("ALTER TABLE cadastro ADD COLUMN familia TEXT", err => {
+        if (!err) {
+          console.log("🛠️ Coluna 'familia' adicionada à tabela cadastro.");
+        }
+      });
+    }
+  });
+});
+
+
 module.exports = client => {
   client.on("interactionCreate", async interaction => {
 
@@ -206,3 +224,5 @@ module.exports = client => {
     }
   });
 };
+
+
