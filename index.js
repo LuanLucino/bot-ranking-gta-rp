@@ -83,6 +83,17 @@ const commands = [
   .setDescription("Realizar cadastro do personagem"),
 
   new SlashCommandBuilder()
+  .setName("removercadastro")
+  .setDescription("Remover cadastro de um membro")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addUserOption(o =>
+    o
+      .setName("usuario")
+      .setDescription("Usuário para remover cadastro")
+      .setRequired(true)
+  ),
+
+  new SlashCommandBuilder()
     .setName("adddinheiro")
     .setDescription("Adicionar dinheiro")
     .addIntegerOption(o =>
