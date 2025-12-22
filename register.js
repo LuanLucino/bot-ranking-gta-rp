@@ -135,10 +135,13 @@ client.on("interactionCreate", async interaction => {
     new ActionRowBuilder().addComponents(telefone)
   );
 
-  // 🔴 ESSENCIAL PARA NÃO DAR ERRO
-  await interaction.deferUpdate();
+  // ✅ IMPORTANTE: remover o select da mensagem antes
+  await interaction.message.edit({ components: [] });
+
+  // ✅ responder a interação abrindo o modal
   await interaction.showModal(modal);
 });
+
 
 
   /* ================= SUBMIT MODAL ================= */
