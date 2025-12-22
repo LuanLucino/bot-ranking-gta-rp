@@ -33,7 +33,7 @@ if (!fs.existsSync("/data")) {
 }
 
 
-const db = new sqlite3.Database("./data/ranking.db");
+const db = new sqlite3.Database("/data/ranking.db");
 
 db.serialize(() => {
   db.run(`
