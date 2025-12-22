@@ -212,15 +212,19 @@ module.exports = client => {
         }
 
         const embed = new EmbedBuilder()
-          .setTitle("📋 Membros Cadastrados")
-          .setColor(0x3498db);
+  .setTitle("📋 Membros Cadastrados")
+  .setColor(0x3498db)
+  .setDescription("Lista completa de personagens registrados no sistema:");
 
-        rows.forEach(r => {
-          embed.addFields({
-            name: `#${r.personagemId} ${r.nome}`,
-            value: `🗣️ ${r.vulgo}\n📞 ${r.telefone}\n🏢 ${r.familia}`
-          });
+rows.forEach(r => {
+  embed.addFields({
+    name: `#${r.personagemId} — ${r.nome}`,
+    value:
+      `🗣️ **Vulgo:** ${r.vulgo}\n` +
+      `📞 **Telefone:** ${r.telefone}\n` +
+      `🏢 **Família:** ${r.familia}`
         });
+    });
 
         interaction.reply({ embeds: [embed] });
       });
