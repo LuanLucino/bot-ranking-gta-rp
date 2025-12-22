@@ -1,4 +1,4 @@
-// index.js
+// index.js e
 require("dotenv").config();
 const {
   Client,
