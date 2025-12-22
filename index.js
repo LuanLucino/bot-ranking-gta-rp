@@ -78,6 +78,10 @@ const commands = [
     .setName("rankingmensal")
     .setDescription("Ranking mensal"),
 
+    new SlashCommandBuilder()
+  .setName("cadastro")
+  .setDescription("Realizar cadastro do personagem"),
+
   new SlashCommandBuilder()
     .setName("adddinheiro")
     .setDescription("Adicionar dinheiro")
