@@ -171,16 +171,19 @@ module.exports = client => {
       }
 
       const embed = new EmbedBuilder()
-        .setTitle("✅ Novo Cadastro Realizado")
-        .setColor(0x2ecc71)
-        .addFields(
-          { name: "👤 Personagem", value: nome, inline: true },
-          { name: "🆔 ID", value: personagemId, inline: true },
-          { name: "🗣️ Vulgo", value: vulgo, inline: true },
-          { name: "📞 Telefone", value: telefone, inline: true },
-          { name: "🏢 Família", value: familia, inline: true }
-        )
-        .setTimestamp();
+  .setTitle("✅ Cadastro Realizado com Sucesso")
+  .setColor(0x2ecc71)
+  .setDescription("📄 **Dados do personagem registrado:**")
+  .addFields(
+    { name: "🆔 ID do Personagem", value: personagemId },
+    { name: "👤 Nome", value: nome },
+    { name: "🗣️ Vulgo", value: vulgo },
+    { name: "📞 Telefone", value: telefone },
+    { name: "🏢 Família", value: familia }
+  )
+  .setFooter({ text: "Sistema de Cadastro • Tōryū Shinkai" })
+  .setTimestamp();
+
 
       await interaction.reply({ embeds: [embed] });
       return;
