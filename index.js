@@ -93,6 +93,21 @@ const commands = [
       .setRequired(true)
   ),
 
+      // COMANDO /MEMBROS 
+  new SlashCommandBuilder()
+  .setName("membros")
+  .setDescription("Listar membros cadastrados")
+  .addStringOption(o =>
+    o
+      .setName("empresa")
+      .setDescription("Filtrar por empresa")
+      .addChoices(
+        { name: "Toryu Shinkai", value: "Toryu Shinkai" },
+        { name: "Restaurante", value: "Restaurante" }
+      )
+      .setRequired(false)
+  ),
+
   new SlashCommandBuilder()
     .setName("adddinheiro")
     .setDescription("Adicionar dinheiro")
