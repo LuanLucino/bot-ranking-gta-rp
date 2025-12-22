@@ -173,7 +173,6 @@ module.exports = client => {
       const embed = new EmbedBuilder()
   .setTitle("✅ Cadastro Realizado com Sucesso")
   .setColor(0x2ecc71)
-  .setDescription("📄 **Dados do personagem registrado:**")
   .addFields(
     { name: "🆔 ID do Personagem", value: personagemId },
     { name: "👤 Nome", value: nome },
