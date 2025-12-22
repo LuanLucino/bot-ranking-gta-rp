@@ -26,6 +26,12 @@ const client = new Client({
 });
 
 /* ================= DATABASE ================= */
+const fs = require("fs");
+
+if (!fs.existsSync("/data")) {
+  fs.mkdirSync("/data", { recursive: true });
+}
+
 
 const db = new sqlite3.Database("./data/ranking.db");
 
