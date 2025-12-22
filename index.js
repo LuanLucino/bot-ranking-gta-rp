@@ -465,5 +465,6 @@ cron.schedule(
 );
 require("./register")(client);
 
+console.log("TOKEN carregado?", !!process.env.TOKEN);
 
 client.login(process.env.TOKEN);
