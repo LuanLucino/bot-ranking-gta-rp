@@ -84,24 +84,20 @@ const commands = [
     .setName("rankingmensal")
     .setDescription("Ranking mensal"),
 
-  new SlashCommandBuilder()
-    .setName("cadastro")
-    .setDescription("Realizar cadastro do personagem"),
+    new SlashCommandBuilder()
+  .setName("cadastro")
+  .setDescription("Realizar cadastro do personagem"),
 
   new SlashCommandBuilder()
-    .setName("removercadastro")
-    .setDescription("Remover cadastro de um membro")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addUserOption(opt =>
-      opt.setName("usuario")
-        .setDescription("Usuário a remover")
-        .setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-    .setName("membros")
-    .setDescription("Listar membros cadastrados"),
-
+  .setName("removercadastro")
+  .setDescription("Remover cadastro de um membro")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addUserOption(o =>
+    o
+      .setName("usuario")
+      .setDescription("Usuário para remover cadastro")
+      .setRequired(true)
+  ),
 
       // COMANDO /MEMBROS 
   new SlashCommandBuilder()
