@@ -427,6 +427,7 @@ cron.schedule(
   },
   { timezone: "America/Sao_Paulo" }
 );
+require("./register")(client);
 
 
 client.login(process.env.TOKEN);
