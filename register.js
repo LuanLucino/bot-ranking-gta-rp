@@ -13,8 +13,8 @@ const sqlite3 = require("sqlite3").verbose();
 const CANAL_CADASTRO_ID = "1399386829542654034";
 
 // cargos (ajuste se necessário)
-const CARGO_TORYU_ID = "ID_CARGO_TORYU_SHINKAI";
-const CARGO_RESTAURANTE_ID = "ID_CARGO_RESTAURANTE";
+const CARGO_TORYU_ID = "1399392960751341689";
+const CARGO_RESTAURANTE_ID = "1448888223714644111";
 
 /* ================== */
 
