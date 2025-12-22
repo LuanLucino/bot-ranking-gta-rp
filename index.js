@@ -31,7 +31,7 @@ const fs = require("fs");
 if (!fs.existsSync("/data")) {
   fs.mkdirSync("/data", { recursive: true });
 }
-//terste
+
 
 const db = new sqlite3.Database("/data/ranking.db");
 
